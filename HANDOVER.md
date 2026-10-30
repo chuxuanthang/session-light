@@ -48,7 +48,7 @@ Thư viện cần trên board: `lib/neopixel.mpy` (đã chép). Trên máy: `pip
 Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | off | #RRGGBB`. Đã thử màu trắng cho đèn chưa gắn session nhưng chói quá nên bỏ. `all:<state>` cho mọi đèn. `ping` → `pong`. Board trả `ok` / `err` (host không cần đọc). Dùng cổng serial console của CircuitPython (không có boot.py, 1 cổng COM). Board nhận diện qua VID `0x2E8A` hoặc mô tả chứa "CircuitPython".
 
 ### Firmware (`code.py`)
-- Hằng số đầu file: `PIN = board.GP29`, `NUM_LEDS = 8`, `BRIGHTNESS = 0.25`. Chỉ dùng LED onboard: `board.GP16`, `1`.
+- Hằng số đầu file: `PIN = board.GP29`, `NUM_LEDS = 8`, `BRIGHTNESS = 0.05` (5%, chọn ngày 31/10/2026 sau khi xem thử 5–100%). Chỉ dùng LED onboard: `board.GP16`, `1`.
 - `COLORS` / `BLINK` ngay đầu file để đổi màu và nhấp nháy. `wait` nhấp nháy chu kỳ 0,5 s. `busy` là cam `(255, 90, 0)`: `(255, 60, 0)` trên thanh LED trông gần như đỏ, nhiều xanh lá hơn nữa thì ngả vàng.
 - Vòng lặp đọc `sys.stdin` không chặn qua `supervisor.runtime.serial_bytes_available`.
 

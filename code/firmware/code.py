@@ -6,7 +6,7 @@ import time, sys, board, neopixel, supervisor
 # ---- CAU HINH: chan va so bong LED ----
 PIN = board.GP29      # Thanh LED. LED onboard: board.GP16
 NUM_LEDS = 8          # LED onboard: 1
-BRIGHTNESS = 0.25
+BRIGHTNESS = 0.05     # 0..1; thap hon 0.05 thi mau bi lech
 # ---------------------------------------------------------
 
 COLORS = {
