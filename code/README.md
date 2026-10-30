@@ -4,7 +4,7 @@
 
 ## 1. Board (một lần)
 1. Chép `firmware/code.py` vào ổ CIRCUITPY (ghi đè code.py cũ). Thanh LED nháy 3 màu rồi tắt là firmware chạy. Nếu báo chống ghi ("write protected"), rút board ra cắm lại rồi chép ngay bên Windows.
-2. Firmware mặc định lái thanh 8 bóng ở GP29: đặt `"num_leds": 8` trong `~/.claude-light/config.json`. Chỉ dùng LED onboard thì sửa 2 dòng đầu code.py thành `PIN = board.GP16`, `NUM_LEDS = 1` và để `num_leds` là 1.
+2. Firmware lái thanh 8 bóng ở GP29, khớp với `num_leds` mặc định là 8 trong `~/.claude-light/config.json`. Máy đã cài bản trước 0.2.7 thì config đã lưu `num_leds: 1`, sửa tay thành 8. Chỉ dùng LED onboard thì sửa 2 dòng đầu code.py thành `PIN = board.GP16`, `NUM_LEDS = 1` và đặt `num_leds` là 1.
 
 ## 2. Máy tính
 ```
@@ -23,7 +23,7 @@ usbipd list                                   # tìm BUSID của dòng 2e8a:101f
 usbipd bind --busid <BUSID>                   # PowerShell Admin, chỉ làm một lần
 ```
 Sau khi bind, không cần tự attach: lúc mở session (và khi chạy `test`, `/session-light:usb-connect`), nếu chưa thấy cổng thì `light.py` tự gọi `usbipd.exe attach --wsl --hardware-id 2e8a:101f`, mất khoảng 3 giây. Board hiện ra ở `/dev/ttyACM0`. User cần thuộc group `dialout`.
-Khi gắn vào WSL, ổ CIRCUITPY chỉ đọc được. Muốn sửa firmware thì chạy `usbipd detach --hardware-id 2e8a:101f` rồi chép file qua Windows, làm trước khi mở session mới vì session mới sẽ tự gắn board lại vào WSL. Đừng chạy `usbipd attach --auto-attach`: nó sẽ giành lại board ngay sau khi detach.
+Khi gắn vào WSL, ổ CIRCUITPY chỉ đọc được, và `usbipd detach` về Windows cũng vẫn chống ghi. Muốn sửa firmware thì rút board ra cắm lại rồi chép file vào ổ CIRCUITPY bên Windows, làm trước khi mở session mới vì session mới sẽ tự gắn board lại vào WSL. Đừng chạy `usbipd attach --auto-attach`: nó sẽ giành lại board ngay sau khi detach.
 
 ## 3. Cài plugin vào Claude Code
 Thư mục gốc repo (chứa `.claude-plugin/marketplace.json`) là marketplace `chuxuanthang-plugins`, repo GitHub `chuxuanthang/session-light`. Cài một lần ở cấp user, từ đó mọi lần chạy `claude` đều có plugin:
@@ -37,7 +37,7 @@ Lúc phát triển, thử nhanh mà không cài: `claude --plugin-dir /duong/dan
 
 ## 4. Dùng
 - Mặc định `auto_assign: true`: session mới tự lấy đèn trống đầu tiên, không cần làm gì. Hết đèn trống thì session mới không có đèn, không giành đèn của session đang chạy.
-- `/session-light:usb-connect 2` gán session ở thư mục hiện tại vào đèn 2 (đẩy session cũ ra nếu đèn đang bận). Bỏ trống số thì gán vào đèn 0.
+- `/session-light:usb-connect 2` gán session ở thư mục hiện tại vào đèn 2 (đẩy session cũ ra nếu đèn đang bận). Số đèn từ 0 đến 7 với thanh 8 bóng; bỏ trống thì gán vào đèn 0.
 - `/session-light:usb-disconnect` gỡ đèn và tắt. Thư mục đó sẽ không được tự gán lại đến khi bạn `usb-connect` lần nữa.
 - `/session-light:usb-status` xem đèn nào gán cho session nào: in tên session (đúng tên trên tab terminal, tên đặt bằng `/rename` được ưu tiên) kèm thư mục. Session chưa có tên thì chỉ in thư mục.
 - Bật `"debug": true` trong config để ghi `~/.claude-light/log.txt` khi cần soi.

@@ -11,7 +11,7 @@
 ## 2. Phần cứng
 | Thành phần | Chi tiết | Trạng thái |
 |---|---|---|
-| Board | RP2040-Zero (clone Waveshare), USB-C, LED WS2812 onboard ở GP16 | Đã có, chạy CircuitPython 10.3.1 |
+| Board | RP2040-Zero (clone Waveshare), USB-C, LED WS2812 onboard ở GP16 (không dùng từ khi có thanh) | Đã có, chạy CircuitPython 10.3.1 |
 | Thanh LED | CJMCU-2812-8 (8 × WS2812B 5050), pad đầu vào ghi `GND / IN / VCC / GND` | Đã hàn, dữ liệu ở GP29, sáng đủ 8 bóng (30/10/2026) |
 | Đầu chuyển | USB-A đực → USB-C đực (30 × 12 × 7 mm) | Đã đặt |
 | Ống co nhiệt | Trong suốt Φ20 mm | Đã đặt |
@@ -71,13 +71,13 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 - [x] Mô phỏng chuỗi sự kiện hook bằng JSON giả: đèn ra đúng trạng thái ở cả 12 ca.
 - [x] Nạp plugin vào Claude Code (`claude --plugin-dir ~/code/claude-light/code`). Session thật đã tự gán đèn 0, AskUserQuestion làm đèn đỏ nhấp nháy, lệnh status chạy được.
 - [x] Sửa các ca biên (30/10/2026): session `cd` thì `disconnect` báo thành công nhưng không bỏ gán, `connect` để lại `pending` treo; hai session cùng thư mục bị gán chung một đèn và bị bỏ gán cùng nhau; `/clear` làm mất hoặc đổi đèn đã chọn; nhiều session mở cùng lúc ghi đè map. `tests/light-edge-cases.py` có 15 ca, trước khi sửa 12 ca lỗi, sau khi sửa pass hết.
-- [x] Sửa lỗi session mới giành đèn đang bận (30/10/2026): `pending` bị treo (vd `/clear` sau khi `cd`, `SessionEnd` ghi theo thư mục con) khiến session mới mở ở thư mục đó đẩy session đang chạy ra. Thêm ca thứ 16 vào test. Bản cài nằm ở `~/.claude/plugins/cache/chuxuanthang-plugins/session-light/<version>/`, không đọc thẳng thư mục nguồn: sửa code phải tăng `version` trong `plugin.json` rồi chạy `claude plugin marketplace update chuxuanthang-plugins && claude plugin update session-light@chuxuanthang-plugins`. Hiện là 0.2.6 (0.2.2–0.2.3 thêm tên session vào `status`, 0.2.4–0.2.5 in tiếng Việt có dấu, kể cả mô tả lệnh và plugin; 0.2.6 `status` chỉ in trạng thái từng đèn, bỏ dòng chờ gán và không tự gán).
+- [x] Sửa lỗi session mới giành đèn đang bận (30/10/2026): `pending` bị treo (vd `/clear` sau khi `cd`, `SessionEnd` ghi theo thư mục con) khiến session mới mở ở thư mục đó đẩy session đang chạy ra. Thêm ca thứ 16 vào test. Bản cài nằm ở `~/.claude/plugins/cache/chuxuanthang-plugins/session-light/<version>/`, không đọc thẳng thư mục nguồn: sửa code phải tăng `version` trong `plugin.json` rồi chạy `claude plugin marketplace update chuxuanthang-plugins && claude plugin update session-light@chuxuanthang-plugins`. Hiện là 0.2.7 (0.2.2–0.2.3 thêm tên session vào `status`, 0.2.4–0.2.5 in tiếng Việt có dấu, kể cả mô tả lệnh và plugin; 0.2.6 `status` chỉ in trạng thái từng đèn, bỏ dòng chờ gán và không tự gán; 0.2.7 mặc định `num_leds: 8` theo thanh LED).
 - [ ] Kiểm chứng trên session thật: lệnh `!` trong slash command có thấy `CLAUDE_CODE_SESSION_ID` không, sau `/clear` biến này có đổi sang id mới không, và `SessionStart` sau `/clear` có cùng cwd với `SessionEnd` không. Nếu không thấy biến thì code đoán theo cwd như cũ.
 - [x] Đã cài qua marketplace local ở cấp user: `claude plugin marketplace add ~/code/claude-light` rồi `claude plugin install session-light@chuxuanthang-plugins` (trước 30/10/2026 tên marketplace là `thangcx-plugins`). Session `claude` thường, không cờ, gọi được `/session-light:usb-status`.
 - [x] Đưa lên GitHub: repo public `chuxuanthang/session-light`, dùng tài khoản cá nhân `chuxuanthang`, không dùng `thangcx-3383`. Git cấu hình riêng cho repo (`git config --local`): user `chuxuanthang`, email `tl.thang244@gmail.com`. Remote `git@github-per:chuxuanthang/session-light.git`: `github-per` là alias SSH trong `~/.ssh/config` dùng key `chuxuanthang`. `gh` trên máy đăng nhập `thangcx-3383` nên repo được tạo trên web. Máy khác cài bằng `claude plugin marketplace add chuxuanthang/session-light`.
 - [ ] Hook gọi `python3`, nên người chạy Claude Code thẳng trên Windows sẽ lỗi. Cần làm hook chạy được trên nhiều hệ điều hành nếu chia sẻ rộng.
 - [x] Hàn thanh LED (30/10/2026). Lái thẳng GP29 từ REPL sáng đủ 8 bóng, đúng màu. Firmware đổi sang `PIN = board.GP29`, `NUM_LEDS = 8`, đã nạp lên board; `~/.claude-light/config.json` đặt `num_leds: 8`.
-- [ ] `light.py` vẫn để mặc định `num_leds: 1` (trong `cfg()` và docstring), lệch với firmware 8 bóng: máy mới cài chỉ dùng đèn 0 cho đến khi sửa config. Đổi mặc định thì phải tăng `version` plugin.
+- [x] `light.py` mặc định `num_leds: 8` (0.2.7), khớp firmware. Máy cài trước đó đã lưu `num_leds` cũ trong `config.json` (`cfg()` chỉ ghi file khi chưa có), phải sửa tay.
 - [ ] Lệnh đầu tiên gửi ngay sau `usbipd attach` bị rơi (30/10/2026: gắn lại xong gửi liền `1:`, `2:`, `3:` thì bóng 1 không sáng, 2 và 3 sáng; gửi lại thì đủ). `wsl_attach()` trả về ngay khi `/dev/ttyACM*` hiện ra, nên đèn `ready` của `SessionStart` có thể không lên. Hướng sửa: sau khi thấy cổng thì gửi `ping` chờ `pong` rồi mới gửi lệnh thật.
 - [ ] Bọc ống co nhiệt, gắn đầu chuyển.
 
@@ -103,5 +103,5 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 ## 6. Hướng phát triển sau
 - Daemon giữ cổng serial, hook gửi qua socket local (tránh tranh cổng khi nhiều session).
 - `boot.py` ẩn ổ CIRCUITPY và mở cổng data riêng (`usb_cdc.enable(data=True)`), đặt VID/PID riêng để nhận diện chắc chắn.
-- Đèn hệ thống (LED onboard) báo kết nối OK / session chưa gán, khi 8 bóng thanh làm slot.
+- Dùng LED onboard (GP16) làm đèn hệ thống báo kết nối OK / session chưa gán; 8 bóng thanh vẫn là 8 slot.
 - Timeout: `wait` quá lâu thì tăng tốc nhấp nháy.

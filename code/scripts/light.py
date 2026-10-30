@@ -11,7 +11,7 @@ Cach dung:
   light.py send <n>:<state>  gui lenh tho (debug)
 
 File cau hinh: ~/.claude-light/config.json
-  {"port": null, "num_leds": 1, "auto_assign": true, "debug": false}
+  {"port": null, "num_leds": 8, "auto_assign": true, "debug": false}
 """
 import sys, os, json, time, contextlib, glob
 
@@ -68,7 +68,7 @@ def locked():
         yield
 
 def cfg():
-    c = {"port": None, "num_leds": 1, "auto_assign": True, "debug": False}
+    c = {"port": None, "num_leds": 8, "auto_assign": True, "debug": False}
     c.update(load(CONFIG, {}))
     if not os.path.exists(CONFIG):
         save(CONFIG, c)
