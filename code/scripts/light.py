@@ -217,10 +217,23 @@ def my_sessions(m, cwd):
 IDLE = ("idle", "shell")  # "shell": ranh nhung dang o che do `!` bash
 NOT_WAIT = (None, "dialog open")  # nguoi dung tu mo /model, /config...: khong phai Claude dang cho
 
+def alive(pid):
+    # claude bi tat ngang (dong terminal) thi khong co SessionEnd, file trang thai cu van ghi "busy"
+    if os.name == "nt" or not isinstance(pid, int):
+        return True  # Windows: os.kill(pid, 0) la gui Ctrl+C, khong dung de kiem tra duoc
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        pass  # con song nhung khong co quyen gui tin hieu
+    return True
+
 def status_file(sid):
+    # moi lan `claude -c` la mot tien trinh moi cung sessionId: chi lay file cua tien trinh con song
     root = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude")
     recs = ((p, load(p, {})) for p in glob.glob(os.path.join(root, "sessions", "*.json")))
-    found = [(r.get("updatedAt", 0), p) for p, r in recs if r.get("sessionId") == sid]
+    found = [(r.get("updatedAt", 0), p) for p, r in recs if r.get("sessionId") == sid and alive(r.get("pid"))]
     return max(found)[1] if found else None
 
 def watch_turn(sid, since_ms):
@@ -241,10 +254,10 @@ def cmd_watch(sid, token, since_ms):
         if load(WATCH, {}).get(sid) != token or sid not in load(MAP, {}):
             return  # co luot moi, hoac session da ket thuc / bo gan den
         rec = load(path, {}) if path else {}
-        if rec.get("sessionId") != sid:
+        if rec.get("sessionId") != sid or not alive(rec.get("pid")):
             path = status_file(sid)
             if not path:
-                return  # Claude Code khong ghi file trang thai: khong theo doi duoc
+                return  # khong co file trang thai (Claude Code khong ghi, hoac claude da tat)
             continue
         status, at = rec.get("status"), rec.get("statusUpdatedAt", 0)
         if at <= since or at == seen:

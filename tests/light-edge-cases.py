@@ -160,7 +160,10 @@ check("UserPromptSubmit chay tien trinh theo doi trang thai",
       argv[:3] == ["watch", "A", L.load(L.WATCH, {}).get("A")] and len(argv) == 4 and argv[3].isdigit(),
       "spawned=%s" % spawned)
 
-def run_watch(steps, token="t1"):
+dead = subprocess.Popen([sys.executable, "-c", "pass"]); dead.wait()
+DEAD_PID = dead.pid  # claude bi tat ngang: file trang thai con, tien trinh thi khong
+
+def run_watch(steps, token="t1", pid=None):
     """steps: trang thai Claude Code ghi lan luot, moi lan sleep mot buoc; het buoc thi co luot moi."""
     fresh(); hook("SessionStart", "A", X); SENT.clear()
     os.environ["CLAUDE_CONFIG_DIR"] = L.DIR
@@ -173,7 +176,7 @@ def run_watch(steps, token="t1"):
             L.save(L.WATCH, {"A": "luot-moi"}); return
         status, at, why = (queue.pop(0) + (None,))[:3]
         L.save(os.path.join(L.DIR, "sessions", "123.json"),
-               {"sessionId": "A", "status": status, "waitingFor": why, "statusUpdatedAt": at, "updatedAt": at})
+               {"sessionId": "A", "pid": pid, "status": status, "waitingFor": why, "statusUpdatedAt": at, "updatedAt": at})
     real_sleep, L.time.sleep = L.time.sleep, tick
     try:
         L.cmd_watch("A", "t1", "1000")
@@ -188,10 +191,11 @@ got = {
     "idle cu truoc prompt": run_watch([("idle", 900), ("idle", 900)]),
     "tu mo /model": run_watch([("busy", 999), ("waiting", 1200, "dialog open")]),
     "luot cu": run_watch([("idle", 1500)], token="t0"),
+    "claude da tat": run_watch([("busy", 1300), ("idle", 1500)], pid=DEAD_PID),
 }
-check("doi den theo trang thai: ngat -> ready, duyet quyen -> wait/busy/ready, con lai khong gui",
+check("doi den theo trang thai: ngat -> ready, duyet quyen -> wait/busy/ready, claude da tat va con lai khong gui",
       got == {"ngat": ["0:ready"], "duyet quyen": ["0:wait", "0:busy", "0:ready"], "idle cu truoc prompt": [],
-              "tu mo /model": [], "luot cu": []}, "got=%s" % got)
+              "tu mo /model": [], "luot cu": [], "claude da tat": []}, "got=%s" % got)
 
 fresh(num_leds=2)
 cfgdir = tempfile.mkdtemp(); os.makedirs(os.path.join(cfgdir, "projects", "-proj"))
