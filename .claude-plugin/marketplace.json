@@ -1,0 +1,11 @@
+{
+  "name": "chuxuanthang-plugins",
+  "owner": { "name": "chuxuanthang" },
+  "plugins": [
+    {
+      "name": "session-light",
+      "source": "./code",
+      "description": "Đèn USB báo trạng thái các session Claude Code (sẵn sàng / đang chạy / chờ xác nhận)"
+    }
+  ]
+}
