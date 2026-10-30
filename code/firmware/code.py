@@ -3,15 +3,15 @@
 #   vi du: 0:busy   0:wait   0:ready   0:off   all:off   0:#ff00ff   ping
 import time, sys, board, neopixel, supervisor
 
-# ---- CAU HINH: doi 2 dong nay khi han xong thanh LED ----
-PIN = board.GP16      # LED onboard. Thanh LED: board.GP29
-NUM_LEDS = 1          # Thanh LED: 8 (hoac 5)
+# ---- CAU HINH: chan va so bong LED ----
+PIN = board.GP29      # Thanh LED. LED onboard: board.GP16
+NUM_LEDS = 8          # LED onboard: 1
 BRIGHTNESS = 0.25
 # ---------------------------------------------------------
 
 COLORS = {
     "ready": (0, 255, 0),      # san sang, khong co luong nao chay
-    "busy":  (255, 60, 0),     # dang chay (cam)
+    "busy":  (255, 90, 0),     # dang chay (cam)
     "wait":  (255, 0, 0),      # dang co cau hoi / can xac nhan (nhap nhay)
     "off":   (0, 0, 0),
 }

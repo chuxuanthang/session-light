@@ -3,8 +3,8 @@
 Đèn USB báo trạng thái session Claude Code: xanh lá = sẵn sàng, cam = đang chạy, đỏ nhấp nháy = cần bạn xác nhận, tắt = chưa có session nào gắn.
 
 ## 1. Board (một lần)
-1. Chép `firmware/code.py` vào ổ CIRCUITPY (ghi đè code.py cũ). LED onboard nháy 3 màu rồi tắt là firmware chạy. Nếu báo chống ghi ("write protected"), rút board ra cắm lại rồi chép ngay bên Windows.
-2. Khi có thanh LED: sửa 2 dòng đầu `PIN = board.GP29`, `NUM_LEDS = 8` trong code.py, và `num_leds` trong `~/.claude-light/config.json`.
+1. Chép `firmware/code.py` vào ổ CIRCUITPY (ghi đè code.py cũ). Thanh LED nháy 3 màu rồi tắt là firmware chạy. Nếu báo chống ghi ("write protected"), rút board ra cắm lại rồi chép ngay bên Windows.
+2. Firmware mặc định lái thanh 8 bóng ở GP29: đặt `"num_leds": 8` trong `~/.claude-light/config.json`. Chỉ dùng LED onboard thì sửa 2 dòng đầu code.py thành `PIN = board.GP16`, `NUM_LEDS = 1` và để `num_leds` là 1.
 
 ## 2. Máy tính
 ```
