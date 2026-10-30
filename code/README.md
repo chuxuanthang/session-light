@@ -42,9 +42,8 @@ Lúc phát triển, thử nhanh mà không cài: `claude --plugin-dir /duong/dan
 - `/session-light:usb-status` xem đèn nào gán cho session nào: in tên session (đúng tên trên tab terminal, tên đặt bằng `/rename` được ưu tiên) kèm thư mục. Session chưa có tên thì chỉ in thư mục.
 - Bật `"debug": true` trong config để ghi `~/.claude-light/log.txt` khi cần soi.
 
-Bấm Esc hoặc Ctrl+C giữa chừng thì Claude Code không chạy hook nào (`Stop` không chạy). Vì vậy mỗi lượt (`UserPromptSubmit`), `light.py` bật một tiến trình nền `light.py watch` đọc `~/.claude/sessions/<pid>.json`, file Claude Code ghi trạng thái phiên (`busy` / `waiting` / `idle`). Trạng thái về `idle` sau lúc gửi prompt thì đưa đèn về xanh rồi thoát; có lượt mới hoặc session đã đóng thì cũng thoát.
+Bấm Esc hoặc Ctrl+C giữa chừng thì Claude Code không chạy hook nào (`Stop` không chạy); duyệt quyền xong cũng không có hook nào cho đến khi tool chạy xong. Vì vậy mỗi lượt (`UserPromptSubmit`), `light.py` bật một tiến trình nền `light.py watch` đọc `~/.claude/sessions/<pid>.json`, file Claude Code ghi trạng thái phiên, và đổi đèn theo mỗi lần trạng thái đổi sau lúc gửi prompt: `waiting` (trừ `dialog open`, tức hộp thoại bạn tự mở như `/model`) thì đỏ, `busy` thì cam, `idle` thì xanh rồi thoát. Có lượt mới hoặc session đã đóng thì cũng thoát.
 
-Hạn chế: sau khi duyệt quyền, đèn vẫn đỏ đến khi tool đó chạy xong: Claude Code không có sự kiện hook nào cho trường hợp này.
 
 ## Giao thức xuống board
 Mỗi dòng `<đèn>:<trạng thái>`: `0:ready`, `0:busy`, `0:wait`, `0:off`, `all:off`, `0:#ff00ff`, `ping`.

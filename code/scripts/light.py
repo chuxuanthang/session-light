@@ -9,7 +9,7 @@ Cach dung:
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
   light.py send <n>:<state>  gui lenh tho (debug)
-  light.py watch ...         (noi bo) theo doi trang thai session, bat Esc/Ctrl+C
+  light.py watch ...         (noi bo) theo doi trang thai session trong luot
 
 File cau hinh: ~/.claude-light/config.json
   {"port": null, "num_leds": 8, "auto_assign": true, "debug": false}
@@ -208,12 +208,14 @@ def my_sessions(m, cwd):
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
     return [sid] if sid else [k for k, v in m.items() if v["cwd"] == cwd]
 
-# ---------- Esc/Ctrl+C ----------
-# Ngat luot khong ban hook nao: Stop khong chay, idle_prompt cung khong (phim Ctrl+C tinh la tuong tac),
-# ngat ngay sau Enter thi transcript cung khong ghi gi. Claude Code ghi trang thai tung tien trinh vao
-# <config>/sessions/<pid>.json: "busy" suot luot, "waiting" khi cho duyet/tra loi, "idle" ngay khi luot
-# dung (ke ca bi ngat). Moi luot chay mot tien trinh nen doc file do, thay ve "idle" thi tra den ve xanh.
+# ---------- theo doi trang thai trong luot ----------
+# Hook khong du: bam Esc/Ctrl+C thi khong hook nao chay (Stop khong, idle_prompt cung khong vi phim Ctrl+C
+# tinh la tuong tac); duyet quyen xong cung khong co hook nao cho den khi tool chay xong. Claude Code ghi
+# trang thai tung tien trinh vao <config>/sessions/<pid>.json: "busy" suot luot, "waiting" khi co hop thoai
+# can nguoi (waitingFor cho biet ly do), "idle" ngay khi luot dung. Moi luot chay mot tien trinh nen doc
+# file do va doi den theo moi lan trang thai doi; ve "idle" thi tra den xanh roi thoat.
 IDLE = ("idle", "shell")  # "shell": ranh nhung dang o che do `!` bash
+NOT_WAIT = (None, "dialog open")  # nguoi dung tu mo /model, /config...: khong phai Claude dang cho
 
 def status_file(sid):
     root = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude")
@@ -233,7 +235,7 @@ def watch_turn(sid, since_ms):
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **detach)
 
 def cmd_watch(sid, token, since_ms):
-    since, path, end = int(since_ms), None, time.time() + 6 * 3600
+    since, path, seen, end = int(since_ms), None, None, time.time() + 6 * 3600
     while time.time() < end:
         time.sleep(0.25)
         if load(WATCH, {}).get(sid) != token or sid not in load(MAP, {}):
@@ -244,11 +246,17 @@ def cmd_watch(sid, token, since_ms):
             if not path:
                 return  # Claude Code khong ghi file trang thai: khong theo doi duoc
             continue
-        if rec.get("status") in IDLE and rec.get("statusUpdatedAt", 0) > since:
-            led = load(MAP, {}).get(sid, {}).get("led")
-            log("idle sid=%s" % sid[:8])
-            if led is not None:
-                send("%d:ready" % led)
+        status, at = rec.get("status"), rec.get("statusUpdatedAt", 0)
+        if at <= since or at == seen:
+            continue  # chua doi tu luc gui prompt (hook UserPromptSubmit da bat cam)
+        seen = at
+        state = ("ready" if status in IDLE else "busy" if status == "busy" else
+                 "wait" if status == "waiting" and rec.get("waitingFor") not in NOT_WAIT else None)
+        led = load(MAP, {}).get(sid, {}).get("led")
+        log("status=%s/%s sid=%s" % (status, rec.get("waitingFor"), sid[:8]))
+        if state and led is not None:
+            send("%d:%s" % (led, state))
+        if status in IDLE:
             return
 
 # ---------- commands ----------

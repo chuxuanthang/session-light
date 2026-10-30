@@ -145,8 +145,8 @@ hook("PostToolUseFailure", "A", X, tool_name="Bash", error="loi", is_interrupt=F
 hook("PostToolUseFailure", "A", X, tool_name="Bash", error="interrupted", is_interrupt=True)
 check("tool loi -> busy, bi ngat -> ready", SENT == ["0:busy", "0:ready"], "sent=%s" % SENT)
 
-# Esc/Ctrl+C (ke ca ngay sau Enter): khong hook nao chay. Claude Code ghi trang thai vao
-# <config>/sessions/<pid>.json; tien trinh nen thay "idle" moi hon luc gui prompt thi tra den ve xanh
+# Esc/Ctrl+C (ke ca ngay sau Enter) va duyet quyen xong: khong hook nao chay. Claude Code ghi trang thai
+# vao <config>/sessions/<pid>.json; tien trinh nen doi den theo moi lan trang thai doi sau luc gui prompt
 fresh()
 hook("SessionStart", "A", X); SENT.clear()
 spawned, real_popen = [], subprocess.Popen
@@ -171,9 +171,9 @@ def run_watch(steps, token="t1"):
     def tick(s):
         if not queue:
             L.save(L.WATCH, {"A": "luot-moi"}); return
-        status, at = queue.pop(0)
+        status, at, why = (queue.pop(0) + (None,))[:3]
         L.save(os.path.join(L.DIR, "sessions", "123.json"),
-               {"sessionId": "A", "status": status, "statusUpdatedAt": at, "updatedAt": at})
+               {"sessionId": "A", "status": status, "waitingFor": why, "statusUpdatedAt": at, "updatedAt": at})
     real_sleep, L.time.sleep = L.time.sleep, tick
     try:
         L.cmd_watch("A", "t1", "1000")
@@ -182,13 +182,16 @@ def run_watch(steps, token="t1"):
         os.environ.pop("CLAUDE_CONFIG_DIR")
     return list(SENT)
 got = {
-    "ngat": run_watch([("busy", 1001), ("busy", 1001), ("idle", 1500)]),
+    "ngat": run_watch([("busy", 999), ("busy", 999), ("idle", 1500)]),
+    "duyet quyen": run_watch([("busy", 999), ("waiting", 1200, "permission prompt"), ("waiting", 1200, "permission prompt"),
+                              ("busy", 1300), ("idle", 1500)]),
     "idle cu truoc prompt": run_watch([("idle", 900), ("idle", 900)]),
-    "cho duyet": run_watch([("busy", 1001), ("waiting", 1200)]),
+    "tu mo /model": run_watch([("busy", 999), ("waiting", 1200, "dialog open")]),
     "luot cu": run_watch([("idle", 1500)], token="t0"),
 }
-check("idle sau luc gui prompt -> ready; idle cu, waiting, luot cu -> khong gui",
-      got == {"ngat": ["0:ready"], "idle cu truoc prompt": [], "cho duyet": [], "luot cu": []}, "got=%s" % got)
+check("doi den theo trang thai: ngat -> ready, duyet quyen -> wait/busy/ready, con lai khong gui",
+      got == {"ngat": ["0:ready"], "duyet quyen": ["0:wait", "0:busy", "0:ready"], "idle cu truoc prompt": [],
+              "tu mo /model": [], "luot cu": []}, "got=%s" % got)
 
 fresh(num_leds=2)
 cfgdir = tempfile.mkdtemp(); os.makedirs(os.path.join(cfgdir, "projects", "-proj"))
