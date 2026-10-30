@@ -40,10 +40,11 @@ WSL2, Windows chạy thẳng, đổi chân LED hay số đèn: xem [`code/README
 Cấu hình nằm ở `~/.claude-light/config.json`: `port`, `num_leds` (mặc định 8), `auto_assign`, `debug`.
 
 ## Hạn chế
-- Bấm Esc giữa chừng thì đèn kẹt màu cam đến prompt sau.
 - Sau khi duyệt quyền, đèn vẫn đỏ đến khi tool đó chạy xong.
 
-Claude Code không có sự kiện hook nào cho hai trường hợp này.
+Claude Code không có sự kiện hook nào cho trường hợp này.
+
+Bấm Esc hoặc Ctrl+C giữa chừng cũng không có hook nào chạy. Plugin xử lý bằng cách mỗi lượt chạy một tiến trình nhỏ ở nền đọc file trạng thái Claude Code ghi cho từng phiên (`~/.claude/sessions/<pid>.json`): trạng thái về `idle` thì đưa đèn về xanh rồi thoát. File này là file nội bộ của Claude Code; bản nào không có thì đèn kẹt cam như trước, đến prompt sau.
 
 ## Phát triển
 - Test các ca biên, không cần board: `python3 tests/light-edge-cases.py`

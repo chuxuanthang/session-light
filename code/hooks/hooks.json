@@ -4,6 +4,7 @@
     "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
     "PreToolUse":        [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
     "PostToolUse":       [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
+    "PostToolUseFailure":[{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
     "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
     "Notification":      [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],
     "Stop":              [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/light.py\" hook" }] }],

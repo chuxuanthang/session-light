@@ -37,7 +37,7 @@ claude-light/                   # marketplace "chuxuanthang-plugins", repo publi
 └── code/                       # plugin "session-light" (= ${CLAUDE_PLUGIN_ROOT})
     ├── firmware/code.py        # CircuitPython, chép vào ổ CIRCUITPY
     ├── .claude-plugin/plugin.json
-    ├── hooks/hooks.json        # SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Notification, Stop, StopFailure, SessionEnd
+    ├── hooks/hooks.json        # SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification, Stop, StopFailure, SessionEnd
     ├── scripts/light.py        # host script: hook | connect | disconnect | status | test | send
     ├── commands/usb-connect.md, usb-disconnect.md, usb-status.md
     └── README.md               # hướng dẫn cài & dùng
@@ -56,7 +56,7 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 - Trạng thái lưu ở `~/.claude-light/`: `config.json` (`port`, `num_leds`, `auto_assign`, `debug`), `map.json` (`session_id → {led, cwd}`), `pending.json` (`cwd → led`), `muted.json` (cwd và session_id đã disconnect), `lock`, `log.txt` khi `debug: true`.
 - Mọi lần đọc-ghi map/pending/muted đều nằm trong `locked()` (`fcntl.flock` trên file `lock`), nên nhiều session mở cùng lúc không ghi đè map của nhau. Windows không có `fcntl` nên chạy không khóa.
 - Mỗi hook cập nhật `cwd` của session trong map, nên session `cd` sang thư mục khác thì slash command vẫn tìm thấy.
-- Ánh xạ sự kiện → trạng thái: `SessionStart`→ready, `UserPromptSubmit`/`PreToolUse`/`PostToolUse`→busy, `PermissionRequest`→wait, `PreToolUse` của `AskUserQuestion`→wait, `Notification`→wait chỉ khi `notification_type` là `permission_prompt`/`elicitation_dialog` (bỏ `idle_prompt`), `Stop`/`StopFailure`→ready, `SessionEnd`→off + bỏ gán (bỏ qua nếu session chưa gán đèn). `SessionEnd` có `reason: clear` thì ghi đèn vào `pending` theo cwd, để session mới do `/clear` tạo ra (session_id mới) nhận lại đúng đèn đó.
+- Ánh xạ sự kiện → trạng thái: `SessionStart`→ready, `UserPromptSubmit`/`PreToolUse`/`PostToolUse`/`PostToolUseFailure`→busy, `PostToolUseFailure` có `is_interrupt: true`→ready, Esc/Ctrl+C (không hook nào chạy)→ready nhờ tiến trình `light.py watch` đọc trạng thái phiên trong `~/.claude/sessions/<pid>.json`, `PermissionRequest`→wait, `PreToolUse` của `AskUserQuestion`→wait, `Notification`→wait khi `notification_type` là `permission_prompt`/`elicitation_dialog`, →ready khi là `idle_prompt`, `Stop`/`StopFailure`→ready, `SessionEnd`→off + bỏ gán (bỏ qua nếu session chưa gán đèn). `SessionEnd` có `reason: clear` thì ghi đèn vào `pending` theo cwd, để session mới do `/clear` tạo ra (session_id mới) nhận lại đúng đèn đó.
 - Gán đèn qua hook: ưu tiên `pending` theo cwd (từ `/usb-connect` hoặc `/clear`), nếu không và `auto_assign` bật thì lấy đèn trống đầu tiên. Hook **không bao giờ đẩy session khác ra**: `pending` chỉ dùng một lần, trỏ vào đèn đang có người giữ thì bị bỏ. Chỉ `/usb-connect` mới giành đèn đang bận (last-wins), cũng là cách gỡ khi `SessionEnd` không kịp chạy và để lại session chết trong map.
 - Gửi serial: mở cổng → ghi 1 dòng → đóng, thử lại 4 lần cách 80 ms khi cổng bận. Mọi lỗi nuốt im lặng, luôn `exit 0` để không làm hỏng session.
 - Slash command dùng `!` để chạy script lúc gõ lệnh và `$ARGUMENTS`, có `allowed-tools: Bash(python3:*)` (thiếu quyền allow thì Claude Code hủy lệnh). Tên lệnh có tiền tố plugin: `/session-light:usb-connect`. Plugin đổi tên từ `claude-light` vì `claude plugin validate` từ chối tên bắt đầu bằng `claude-`. Thư mục trạng thái vẫn là `~/.claude-light/`.
@@ -78,17 +78,24 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 - [ ] Hook gọi `python3`, nên người chạy Claude Code thẳng trên Windows sẽ lỗi. Cần làm hook chạy được trên nhiều hệ điều hành nếu chia sẻ rộng.
 - [x] Hàn thanh LED (30/10/2026). Lái thẳng GP29 từ REPL sáng đủ 8 bóng, đúng màu. Firmware đổi sang `PIN = board.GP29`, `NUM_LEDS = 8`, đã nạp lên board; `~/.claude-light/config.json` đặt `num_leds: 8`.
 - [x] `light.py` mặc định `num_leds: 8` (0.2.7), khớp firmware. Máy cài trước đó đã lưu `num_leds` cũ trong `config.json` (`cfg()` chỉ ghi file khi chưa có), phải sửa tay.
-- [ ] Lệnh đầu tiên gửi ngay sau `usbipd attach` bị rơi (30/10/2026: gắn lại xong gửi liền `1:`, `2:`, `3:` thì bóng 1 không sáng, 2 và 3 sáng; gửi lại thì đủ). `wsl_attach()` trả về ngay khi `/dev/ttyACM*` hiện ra, nên đèn `ready` của `SessionStart` có thể không lên. Hướng sửa: sau khi thấy cổng thì gửi `ping` chờ `pong` rồi mới gửi lệnh thật.
+- [x] Lệnh đầu tiên gửi ngay sau `usbipd attach` bị rơi (sửa 31/10/2026, bản 0.2.8). Hai nguyên nhân, đều đo trên board thật:
+  - Node `/dev/ttyACM0` mới tạo là `root` 0600, khoảng 0,18 s sau udev mới đổi sang group `dialout`. `send()` chỉ thử lại khoảng 0,3 s rồi bỏ. Giờ `wsl_attach()` chờ đến khi `os.access` mở được cổng.
+  - Cổng mới có termios mặc định (ECHO, ICANON bật). Lúc mở cổng, CircuitPython gửi status bar (`ESC]0;🐍code.py | 10.3.1ESC\`, không có xuống dòng). tty dội chuỗi đó ngược xuống board trước khi pyserial kịp chuyển raw, chuỗi nằm trong `buf` của firmware và dính vào lệnh thật, nên board trả `err`. Giờ `send()` ghi `"\n" + lệnh + "\n"`: dòng rác thành dòng riêng (board trả `err`), lệnh thật vẫn `ok`. Kiểm chứng: gắn lại 2 lần, phản hồi `err\r\nok\r\n`.
+- [x] Esc/Ctrl+C đèn kẹt cam (sửa 31/10/2026, bản 0.2.10). Đo trên Claude Code 2.1.314 với log debug:
+  - Ngắt lúc Claude đang nghĩ/viết thì không hook nào chạy, kể cả `idle_prompt` (phím Ctrl+C tính là tương tác nên bộ đếm rảnh không chạy; đặt `messageIdleNotifThresholdMs` 5000 thì `idle_prompt` có phát 5 s sau `Stop` nhưng sau khi ngắt thì không).
+  - Bản 0.2.9 đọc transcript tìm dòng `[Request interrupted by user]`. Chạy được khi ngắt giữa chừng, nhưng ngắt ngay sau Enter (trước khi có chữ nào) thì Claude Code trả prompt về ô nhập và không ghi gì vào transcript, nên bỏ.
+  - Bản 0.2.10: Claude Code ghi trạng thái từng tiến trình vào `<config>/sessions/<pid>.json` (`sessionId`; `status`: `busy` suốt lượt kể cả giữa các tool, `waiting` khi chờ duyệt/trả lời, `idle` ngay khi lượt dừng, `shell` là rảnh trong chế độ `!`; `statusUpdatedAt` tính bằng ms). `UserPromptSubmit` bật tiến trình nền tách hẳn (`start_new_session`, stdio về `/dev/null`) `light.py watch <sid> <token> <ms lúc hook chạy>`, đọc file đó mỗi 0,25 s. Thấy `idle`/`shell` có `statusUpdatedAt` mới hơn lúc hook chạy thì gửi `ready`. Thoát khi token trong `watch.json` bị lượt mới thay, khi session không còn trong `map.json`, khi không tìm thấy file trạng thái, hoặc sau 6 giờ. Thử thật bằng session giả: hook trả về sau 0,05 s, đèn về xanh trong khoảng 0,3 s sau khi trạng thái về `idle`.
+- [ ] Chưa rõ `PostToolUseFailure` (`is_interrupt`) có chạy khi ngắt lúc tool đang chạy không: hook nhận abort signal của lượt đã bị ngắt. Không quan trọng vì tiến trình `watch` đã bắt được.
 - [ ] Bọc ống co nhiệt, gắn đầu chuyển.
 
 ## 5. Kết quả đối chiếu docs Claude Code (code.claude.com, 30/10/2026)
 - Đúng: các trường `hook_event_name`, `session_id`, `cwd` có ở mọi sự kiện; nạp plugin bằng `--plugin-dir`; `hooks/hooks.json` có cùng dạng với `hooks` trong settings.json; bỏ `matcher` nghĩa là bắt mọi trường hợp; `${CLAUDE_PLUGIN_ROOT}` và `$ARGUMENTS` dùng được trong command.
 - Đã sửa: `idle_prompt` bắn khoảng 60 s sau khi Claude trả lời xong, làm đèn rảnh chuyển đỏ, nên giờ lọc theo `notification_type`. `permission_prompt` chỉ bắn sau khi chờ khoảng 6 s, nên thêm `PermissionRequest` (bắn ngay). Lỗi API bắn `StopFailure` chứ không bắn `Stop`, nên đã thêm.
 - Hạn chế đã biết (docs không có sự kiện tương ứng):
-  - Bấm Esc thì `Stop` không chạy, đèn kẹt màu cam đến prompt sau.
+  - Bấm Esc/Ctrl+C thì `Stop` không chạy. Từ 0.2.10 tiến trình `light.py watch` đọc trạng thái phiên và đưa về xanh (xem mục Trạng thái).
   - Không có sự kiện nào báo người dùng vừa duyệt quyền. Đèn đỏ đến khi tool chạy xong (`PostToolUse`), tool dài thì đỏ lâu.
   - Từ chối quyền thì có thể đèn đỏ đến prompt sau (chưa kiểm chứng).
-- Chưa kiểm chứng: gọi lệnh không tiền tố `/usb-connect` có chạy không; `idle_prompt` có bắn khi đang chờ duyệt quyền không (nếu có thì dùng được để gỡ lỗi Esc).
+- Chưa kiểm chứng: gọi lệnh không tiền tố `/usb-connect` có chạy không. Đã đọc mã Claude Code 2.1.314: `idle_prompt` không phát khi đang chạy hoặc có hộp thoại (kiểm tra `isLoading`, `isDialogOnScreen`), nên dùng để đưa về xanh là an toàn.
 
 ## 5b. Môi trường WSL2
 - WSL2 không thấy COM port. Dùng usbipd-win 5.3 (đã cài, board `2e8a:101f` đã `bind`). `light.py` tự attach: hàm `wsl_attach()` chạy ở `SessionStart`, `connect`, `test`. Nếu có `/mnt/c/Program Files/usbipd-win/usbipd.exe` mà chưa thấy cổng thì gọi `attach --wsl --hardware-id 2e8a:101f` (không cần Admin), mất khoảng 3 s. Đã kiểm chứng: board đang ở Windows thì `test` tự gắn lại được. Cổng là `/dev/ttyACM0`, user đã nằm trong group `dialout`.

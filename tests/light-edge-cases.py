@@ -9,11 +9,13 @@ spec = importlib.util.spec_from_file_location("light", SRC)
 L = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(L)
 
+REAL_SEND, REAL_ATTACH = L.send, L.wsl_attach
 SENT = []
 L.send = lambda line, retries=4: SENT.append(line) or True
 L.wsl_attach = lambda: None
 FILES = {"CONFIG": "config.json", "MAP": "map.json", "PENDING": "pending.json",
-         "MUTED": "muted.json", "LOG": "log.txt", "LOCK": "lock"}
+         "MUTED": "muted.json", "LOG": "log.txt", "LOCK": "lock",
+         "WATCH": "watch.json"}
 
 def fresh(num_leds=1, auto=True):
     L.DIR = tempfile.mkdtemp()
@@ -134,7 +136,59 @@ fresh()
 hook("SessionStart", "A", X); SENT.clear()
 hook("Notification", "A", X, notification_type="idle_prompt")
 hook("PreToolUse", "A", X, tool_name="AskUserQuestion")
-check("idle_prompt bo qua, AskUserQuestion -> wait", SENT == ["0:wait"], "sent=%s" % SENT)
+check("idle_prompt -> ready, AskUserQuestion -> wait", SENT == ["0:ready", "0:wait"], "sent=%s" % SENT)
+
+# Esc/Ctrl+C luc tool dang chay: Stop khong chay, chi co PostToolUseFailure kem is_interrupt
+fresh()
+hook("SessionStart", "A", X); SENT.clear()
+hook("PostToolUseFailure", "A", X, tool_name="Bash", error="loi", is_interrupt=False)
+hook("PostToolUseFailure", "A", X, tool_name="Bash", error="interrupted", is_interrupt=True)
+check("tool loi -> busy, bi ngat -> ready", SENT == ["0:busy", "0:ready"], "sent=%s" % SENT)
+
+# Esc/Ctrl+C (ke ca ngay sau Enter): khong hook nao chay. Claude Code ghi trang thai vao
+# <config>/sessions/<pid>.json; tien trinh nen thay "idle" moi hon luc gui prompt thi tra den ve xanh
+fresh()
+hook("SessionStart", "A", X); SENT.clear()
+spawned, real_popen = [], subprocess.Popen
+subprocess.Popen = lambda argv, **kw: spawned.append(argv)
+try:
+    hook("UserPromptSubmit", "A", X)
+finally:
+    subprocess.Popen = real_popen
+argv = spawned[0][2:] if spawned else []
+check("UserPromptSubmit chay tien trinh theo doi trang thai",
+      argv[:3] == ["watch", "A", L.load(L.WATCH, {}).get("A")] and len(argv) == 4 and argv[3].isdigit(),
+      "spawned=%s" % spawned)
+
+def run_watch(steps, token="t1"):
+    """steps: trang thai Claude Code ghi lan luot, moi lan sleep mot buoc; het buoc thi co luot moi."""
+    fresh(); hook("SessionStart", "A", X); SENT.clear()
+    os.environ["CLAUDE_CONFIG_DIR"] = L.DIR
+    os.makedirs(os.path.join(L.DIR, "sessions"))
+    L.save(os.path.join(L.DIR, "sessions", "999.json"), {"sessionId": "B", "status": "idle", "statusUpdatedAt": 9e12})
+    L.save(L.WATCH, {"A": token})
+    queue = list(steps)
+    def tick(s):
+        if not queue:
+            L.save(L.WATCH, {"A": "luot-moi"}); return
+        status, at = queue.pop(0)
+        L.save(os.path.join(L.DIR, "sessions", "123.json"),
+               {"sessionId": "A", "status": status, "statusUpdatedAt": at, "updatedAt": at})
+    real_sleep, L.time.sleep = L.time.sleep, tick
+    try:
+        L.cmd_watch("A", "t1", "1000")
+    finally:
+        L.time.sleep = real_sleep
+        os.environ.pop("CLAUDE_CONFIG_DIR")
+    return list(SENT)
+got = {
+    "ngat": run_watch([("busy", 1001), ("busy", 1001), ("idle", 1500)]),
+    "idle cu truoc prompt": run_watch([("idle", 900), ("idle", 900)]),
+    "cho duyet": run_watch([("busy", 1001), ("waiting", 1200)]),
+    "luot cu": run_watch([("idle", 1500)], token="t0"),
+}
+check("idle sau luc gui prompt -> ready; idle cu, waiting, luot cu -> khong gui",
+      got == {"ngat": ["0:ready"], "idle cu truoc prompt": [], "cho duyet": [], "luot cu": []}, "got=%s" % got)
 
 fresh(num_leds=2)
 cfgdir = tempfile.mkdtemp(); os.makedirs(os.path.join(cfgdir, "projects", "-proj"))
@@ -156,6 +210,45 @@ fresh()
 for raw in ("", "not json", "{}", '{"hook_event_name":"Stop"}'):
     sys.stdin = io.StringIO(raw); L.cmd_hook()
 check("stdin rong/sai", SENT == [], "sent=%s" % SENT)
+
+# Lan mo cong dau sau attach, tty con ECHO nen doi status bar CircuitPython xuong board,
+# rac nam san trong buf: lenh that van phai den board thanh mot dong rieng
+class FakeSerial:
+    written = b""
+    def __init__(self, *a, **k): pass
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+    def write(self, b): FakeSerial.written += b
+    def flush(self): pass
+fresh(); L.save(L.CONFIG, {"port": "/dev/fake", "num_leds": 1, "auto_assign": True, "debug": False})
+real_serial, sys.modules["serial"] = sys.modules.get("serial"), type(sys)("serial")
+sys.modules["serial"].Serial = FakeSerial
+try:
+    REAL_SEND("0:ready")
+finally:
+    if real_serial: sys.modules["serial"] = real_serial
+    else: sys.modules.pop("serial")
+junk = "^[]0;\U0001f40dcode.py | 10.3.1^[\\"
+lines = [s.strip() for s in (junk + FakeSerial.written.decode()).replace("\r", "\n").split("\n")]
+check("lenh dau khong dinh rac trong buf board", "0:ready" in lines, "board doc duoc cac dong %r" % lines)
+
+# Sau attach, node /dev/ttyACM0 la root 0600 mot luc roi udev moi cap quyen dialout:
+# wsl_attach chi duoc tra ve khi cong da mo duoc
+calls = {"find": 0, "access": 0}
+def fake_find():
+    calls["find"] += 1
+    return None if calls["find"] == 1 else "/dev/ttyACM0"
+def fake_access(path, mode):
+    calls["access"] += 1
+    return calls["access"] >= 3
+saved = (L.USBIPD, L.find_port, os.access, L.time.sleep, subprocess.run)
+L.USBIPD, L.find_port, os.access, L.time.sleep = SRC, fake_find, fake_access, lambda s: None
+subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")
+try:
+    REAL_ATTACH()
+finally:
+    L.USBIPD, L.find_port, os.access, L.time.sleep, subprocess.run = saved
+check("attach cho den khi mo duoc cong", calls["access"] == 3, "os.access goi %d lan" % calls["access"])
 
 # 3 session mo cung luc: moi session phai co den rieng ngay tu SessionStart
 bad = 0

@@ -9,6 +9,7 @@ Cach dung:
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
   light.py send <n>:<state>  gui lenh tho (debug)
+  light.py watch ...         (noi bo) theo doi trang thai session, bat Esc/Ctrl+C
 
 File cau hinh: ~/.claude-light/config.json
   {"port": null, "num_leds": 8, "auto_assign": true, "debug": false}
@@ -23,6 +24,7 @@ PENDING = os.path.join(DIR, "pending.json")  # {cwd: led}
 MUTED = os.path.join(DIR, "muted.json")      # [cwd hoac session_id] da disconnect: khong tu gan lai
 LOG = os.path.join(DIR, "log.txt")
 LOCK = os.path.join(DIR, "lock")
+WATCH = os.path.join(DIR, "watch.json")      # {session_id: token cua tien trinh theo doi luot hien tai}
 # WSL2 khong thay COM port: nho usbipd-win gan board vao (can bind 1 lan bang PowerShell Admin)
 USBIPD = "/mnt/c/Program Files/usbipd-win/usbipd.exe"
 BOARD_HWID = "2e8a:101f"
@@ -32,13 +34,15 @@ EVENT_STATE = {
     "UserPromptSubmit": "busy",
     "PreToolUse": "busy",
     "PostToolUse": "busy",
+    "PostToolUseFailure": "busy",
     "PermissionRequest": "wait",
     "Notification": "wait",
     "Stop": "ready",
     "StopFailure": "ready",
     "SessionEnd": "off",
 }
-# Notification chi bao do khi can nguoi xu ly; idle_prompt ban ~60s sau Stop nen bo qua
+# Notification: bao do khi can nguoi xu ly. idle_prompt chi ban khi Claude ranh >=60s va khong co
+# hop thoai nao, nen dua ve xanh: go den cam ket sau khi bam Esc/Ctrl+C luc Claude dang viet
 WAIT_NOTIFY = {"permission_prompt", "elicitation_dialog"}
 
 def load(path, default):
@@ -108,8 +112,11 @@ def wsl_attach():
     log("usbipd attach exit=%d %s" % (r.returncode, r.stderr.strip()[-200:]))
     if r.returncode != 0:
         return
-    for _ in range(30):  # cho /dev/ttyACM* hien ra, toi da ~3s
-        if find_port():
+    # cho /dev/ttyACM* hien ra VA mo duoc, toi da ~3s: node moi tao la root 0600,
+    # udev doi sang group dialout sau ~0.2s; gui som qua thi send() het luot thu lai
+    for _ in range(30):
+        port = find_port()
+        if port and os.access(port, os.R_OK | os.W_OK):
             return
         time.sleep(0.1)
 
@@ -126,7 +133,10 @@ def send(line, retries=4):
     for i in range(retries):
         try:
             with serial.Serial(port, 115200, timeout=0.3, write_timeout=0.5) as s:
-                s.write((line + "\n").encode())
+                # "\n" dau dong cat rac con trong buf cua board thanh dong rieng (board tra "err"
+                # cho dong rac, dong rong thi bo qua). Rac co that: lan mo dau sau khi attach,
+                # tty con ECHO nen doi lai status bar CircuitPython xuong board.
+                s.write(("\n" + line + "\n").encode())
                 s.flush()
                 log("-> " + line)
                 return True
@@ -198,18 +208,65 @@ def my_sessions(m, cwd):
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
     return [sid] if sid else [k for k, v in m.items() if v["cwd"] == cwd]
 
+# ---------- Esc/Ctrl+C ----------
+# Ngat luot khong ban hook nao: Stop khong chay, idle_prompt cung khong (phim Ctrl+C tinh la tuong tac),
+# ngat ngay sau Enter thi transcript cung khong ghi gi. Claude Code ghi trang thai tung tien trinh vao
+# <config>/sessions/<pid>.json: "busy" suot luot, "waiting" khi cho duyet/tra loi, "idle" ngay khi luot
+# dung (ke ca bi ngat). Moi luot chay mot tien trinh nen doc file do, thay ve "idle" thi tra den ve xanh.
+IDLE = ("idle", "shell")  # "shell": ranh nhung dang o che do `!` bash
+
+def status_file(sid):
+    root = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude")
+    recs = ((p, load(p, {})) for p in glob.glob(os.path.join(root, "sessions", "*.json")))
+    found = [(r.get("updatedAt", 0), p) for p, r in recs if r.get("sessionId") == sid]
+    return max(found)[1] if found else None
+
+def watch_turn(sid, since_ms):
+    token = "%d.%d" % (os.getpid(), since_ms)
+    with locked():  # luot moi thay token: tien trinh cu tu thoat. Bo token cua session da ket thuc
+        m = load(MAP, {})
+        w = {k: v for k, v in load(WATCH, {}).items() if k in m}
+        w[sid] = token; save(WATCH, w)
+    import subprocess
+    detach = {"creationflags": 0x208} if os.name == "nt" else {"start_new_session": True}
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "watch", sid, token, str(since_ms)],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **detach)
+
+def cmd_watch(sid, token, since_ms):
+    since, path, end = int(since_ms), None, time.time() + 6 * 3600
+    while time.time() < end:
+        time.sleep(0.25)
+        if load(WATCH, {}).get(sid) != token or sid not in load(MAP, {}):
+            return  # co luot moi, hoac session da ket thuc / bo gan den
+        rec = load(path, {}) if path else {}
+        if rec.get("sessionId") != sid:
+            path = status_file(sid)
+            if not path:
+                return  # Claude Code khong ghi file trang thai: khong theo doi duoc
+            continue
+        if rec.get("status") in IDLE and rec.get("statusUpdatedAt", 0) > since:
+            led = load(MAP, {}).get(sid, {}).get("led")
+            log("idle sid=%s" % sid[:8])
+            if led is not None:
+                send("%d:ready" % led)
+            return
+
 # ---------- commands ----------
 def cmd_hook():
     try:
         data = json.load(sys.stdin)
     except Exception:
         return
+    started = int(time.time() * 1000)
     event = data.get("hook_event_name", "")
     sid = data.get("session_id", "")
     cwd = data.get("cwd") or os.getcwd()
     state = EVENT_STATE.get(event)
-    if event == "Notification" and data.get("notification_type") not in WAIT_NOTIFY:
-        state = None
+    if event == "Notification":
+        kind = data.get("notification_type")
+        state = "wait" if kind in WAIT_NOTIFY else "ready" if kind == "idle_prompt" else None
+    if event == "PostToolUseFailure" and data.get("is_interrupt"):
+        state = "ready"  # Esc/Ctrl+C luc tool dang chay: Stop khong chay
     if event == "PreToolUse" and data.get("tool_name") == "AskUserQuestion":
         state = "wait"
     log("event=%s sid=%s cwd=%s" % (event, sid[:8], cwd))
@@ -221,6 +278,8 @@ def cmd_hook():
         led = end_session(sid, cwd, data.get("reason")) if event == "SessionEnd" else led_for(sid, cwd)
     if led is not None:
         send("%d:%s" % (led, state))
+        if event == "UserPromptSubmit":
+            watch_turn(sid, started)
 
 def cmd_connect(n):
     try:
@@ -315,6 +374,8 @@ if __name__ == "__main__":
             cmd_status()
         elif args[0] == "test":
             cmd_test()
+        elif args[0] == "watch" and len(args) > 3:
+            cmd_watch(*args[1:4])
         elif args[0] == "send" and len(args) > 1:
             print("ok" if send(args[1]) else "fail")
         else:
