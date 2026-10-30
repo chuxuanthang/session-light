@@ -31,6 +31,8 @@ Lưu ý kỹ thuật: Zero chạy logic 3.3 V lái WS2812 5 V; thường chạy 
 claude-light/                   # marketplace "chuxuanthang-plugins", repo public github.com/chuxuanthang/session-light
 ├── .claude-plugin/marketplace.json   # liệt kê plugin session-light, source ./code
 ├── HANDOVER.md                 # file này
+├── README.md                   # trang giới thiệu trên GitHub, chi tiết trỏ sang code/README.md
+├── LICENSE                     # MIT
 ├── tests/light-edge-cases.py   # test các ca biên của light.py, không cần board: python3 tests/light-edge-cases.py
 └── code/                       # plugin "session-light" (= ${CLAUDE_PLUGIN_ROOT})
     ├── firmware/code.py        # CircuitPython, chép vào ổ CIRCUITPY
