@@ -8,20 +8,21 @@ SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "code", "sc
 spec = importlib.util.spec_from_file_location("light", SRC)
 L = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(L)
+S, B, W = L.store, L.board, L.watch  # file/cau hinh, cong serial, theo doi trang thai
 
-REAL_SEND, REAL_ATTACH = L.send, L.wsl_attach
+REAL_SEND, REAL_ATTACH = B.send, B.wsl_attach
 SENT = []
-L.send = lambda line, retries=4: SENT.append(line) or True
-L.wsl_attach = lambda: None
+B.send = lambda line, retries=4: SENT.append(line) or True
+B.wsl_attach = lambda: None
 FILES = {"CONFIG": "config.json", "MAP": "map.json", "PENDING": "pending.json",
          "MUTED": "muted.json", "LOG": "log.txt", "LOCK": "lock",
          "WATCH": "watch.json"}
 
 def fresh(num_leds=1, auto=True):
-    L.DIR = tempfile.mkdtemp()
+    S.DIR = tempfile.mkdtemp()
     for name, f in FILES.items():
-        setattr(L, name, os.path.join(L.DIR, f))
-    L.save(L.CONFIG, {"port": None, "num_leds": num_leds, "auto_assign": auto, "debug": False})
+        setattr(S, name, os.path.join(S.DIR, f))
+    S.save(S.CONFIG, {"port": None, "num_leds": num_leds, "auto_assign": auto, "debug": False})
     SENT.clear()
 
 def hook(event, sid, cwd, **extra):
@@ -45,8 +46,8 @@ def cmd(fn, cwd, sid, *args):
             os.environ["CLAUDE_CODE_SESSION_ID"] = env
     return out.getvalue().strip()
 
-def m(): return L.load(L.MAP, {})
-def p(): return L.load(L.PENDING, {})
+def m(): return S.load(S.MAP, {})
+def p(): return S.load(S.PENDING, {})
 def led(sid): return m().get(sid, {}).get("led")
 
 results = []
@@ -157,7 +158,7 @@ finally:
     subprocess.Popen = real_popen
 argv = spawned[0][2:] if spawned else []
 check("UserPromptSubmit chay tien trinh theo doi trang thai",
-      argv[:3] == ["watch", "A", L.load(L.WATCH, {}).get("A")] and len(argv) == 4 and argv[3].isdigit(),
+      argv[:3] == ["watch", "A", S.load(S.WATCH, {}).get("A")] and len(argv) == 4 and argv[3].isdigit(),
       "spawned=%s" % spawned)
 
 dead = subprocess.Popen([sys.executable, "-c", "pass"]); dead.wait()
@@ -166,20 +167,20 @@ DEAD_PID = dead.pid  # claude bi tat ngang: file trang thai con, tien trinh thi 
 def run_watch(steps, token="t1", pid=None):
     """steps: trang thai Claude Code ghi lan luot, moi lan sleep mot buoc; het buoc thi co luot moi."""
     fresh(); hook("SessionStart", "A", X); SENT.clear()
-    os.environ["CLAUDE_CONFIG_DIR"] = L.DIR
-    os.makedirs(os.path.join(L.DIR, "sessions"))
-    L.save(os.path.join(L.DIR, "sessions", "999.json"), {"sessionId": "B", "status": "idle", "statusUpdatedAt": 9e12})
-    L.save(L.WATCH, {"A": token})
+    os.environ["CLAUDE_CONFIG_DIR"] = S.DIR
+    os.makedirs(os.path.join(S.DIR, "sessions"))
+    S.save(os.path.join(S.DIR, "sessions", "999.json"), {"sessionId": "B", "status": "idle", "statusUpdatedAt": 9e12})
+    S.save(S.WATCH, {"A": token})
     queue = list(steps)
     def tick(s):
         if not queue:
-            L.save(L.WATCH, {"A": "luot-moi"}); return
+            S.save(S.WATCH, {"A": "luot-moi"}); return
         status, at, why = (queue.pop(0) + (None,))[:3]
-        L.save(os.path.join(L.DIR, "sessions", "123.json"),
+        S.save(os.path.join(S.DIR, "sessions", "123.json"),
                {"sessionId": "A", "pid": pid, "status": status, "waitingFor": why, "statusUpdatedAt": at, "updatedAt": at})
     real_sleep, L.time.sleep = L.time.sleep, tick
     try:
-        L.cmd_watch("A", "t1", "1000")
+        W.cmd_watch("A", "t1", "1000")
     finally:
         L.time.sleep = real_sleep
         os.environ.pop("CLAUDE_CONFIG_DIR")
@@ -207,7 +208,7 @@ with open(os.path.join(cfgdir, "projects", "-proj", "A.jsonl"), "w", encoding="u
 os.environ["CLAUDE_CONFIG_DIR"] = cfgdir
 hook("SessionStart", "A", X)
 hook("SessionStart", "B", "/y")           # B chua co transcript: in cwd
-L.save(L.MUTED, ["/khac"]); L.save(L.PENDING, {"/z": 1})  # status chi in den, khong in muted/pending
+S.save(S.MUTED, ["/khac"]); S.save(S.PENDING, {"/z": 1})  # status chi in den, khong in muted/pending
 out = cmd(L.cmd_status, X, None)
 os.environ.pop("CLAUDE_CONFIG_DIR")
 check("status chi in ten session tren tung den",
@@ -227,7 +228,7 @@ class FakeSerial:
     def __exit__(self, *a): pass
     def write(self, b): FakeSerial.written += b
     def flush(self): pass
-fresh(); L.save(L.CONFIG, {"port": "/dev/fake", "num_leds": 1, "auto_assign": True, "debug": False})
+fresh(); S.save(S.CONFIG, {"port": "/dev/fake", "num_leds": 1, "auto_assign": True, "debug": False})
 real_serial, sys.modules["serial"] = sys.modules.get("serial"), type(sys)("serial")
 sys.modules["serial"].Serial = FakeSerial
 try:
@@ -248,13 +249,13 @@ def fake_find():
 def fake_access(path, mode):
     calls["access"] += 1
     return calls["access"] >= 3
-saved = (L.USBIPD, L.find_port, os.access, L.time.sleep, subprocess.run)
-L.USBIPD, L.find_port, os.access, L.time.sleep = SRC, fake_find, fake_access, lambda s: None
+saved = (B.USBIPD, B.find_port, os.access, L.time.sleep, subprocess.run)
+B.USBIPD, B.find_port, os.access, L.time.sleep = SRC, fake_find, fake_access, lambda s: None
 subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, "", "")
 try:
     REAL_ATTACH()
 finally:
-    L.USBIPD, L.find_port, os.access, L.time.sleep, subprocess.run = saved
+    B.USBIPD, B.find_port, os.access, L.time.sleep, subprocess.run = saved
 check("attach cho den khi mo duoc cong", calls["access"] == 3, "os.access goi %d lan" % calls["access"])
 
 # 3 session mo cung luc: moi session phai co den rieng ngay tu SessionStart

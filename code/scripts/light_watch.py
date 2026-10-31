@@ -1,0 +1,68 @@
+"""claude-light: theo doi trang thai session trong luot, ngoai hook.
+
+Hook khong du: bam Esc/Ctrl+C thi khong hook nao chay (Stop khong, idle_prompt cung khong vi phim Ctrl+C
+tinh la tuong tac); duyet quyen xong cung khong co hook nao cho den khi tool chay xong. Claude Code ghi
+trang thai tung tien trinh vao <config>/sessions/<pid>.json: "busy" suot luot, "waiting" khi co hop thoai
+can nguoi (waitingFor cho biet ly do), "idle" ngay khi luot dung. Moi luot chay mot tien trinh nen doc
+file do va doi den theo moi lan trang thai doi; ve "idle" thi tra den xanh roi thoat.
+"""
+import os, sys, glob, time
+import light_store as store, light_serial as board
+
+LIGHT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "light.py")
+IDLE = ("idle", "shell")  # "shell": ranh nhung dang o che do `!` bash
+NOT_WAIT = (None, "dialog open")  # nguoi dung tu mo /model, /config...: khong phai Claude dang cho
+
+def alive(pid):
+    # claude bi tat ngang (dong terminal) thi khong co SessionEnd, file trang thai cu van ghi "busy"
+    if os.name == "nt" or not isinstance(pid, int):
+        return True  # Windows: os.kill(pid, 0) la gui Ctrl+C, khong dung de kiem tra duoc
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        pass  # con song nhung khong co quyen gui tin hieu
+    return True
+
+def status_file(sid):
+    # moi lan `claude -c` la mot tien trinh moi cung sessionId: chi lay file cua tien trinh con song
+    recs = ((p, store.load(p, {})) for p in glob.glob(os.path.join(store.claude_dir(), "sessions", "*.json")))
+    found = [(r.get("updatedAt", 0), p) for p, r in recs if r.get("sessionId") == sid and alive(r.get("pid"))]
+    return max(found)[1] if found else None
+
+def watch_turn(sid, since_ms):
+    token = "%d.%d" % (os.getpid(), since_ms)
+    with store.locked():  # luot moi thay token: tien trinh cu tu thoat. Bo token cua session da ket thuc
+        m = store.load(store.MAP, {})
+        w = {k: v for k, v in store.load(store.WATCH, {}).items() if k in m}
+        w[sid] = token; store.save(store.WATCH, w)
+    import subprocess
+    detach = {"creationflags": 0x208} if os.name == "nt" else {"start_new_session": True}
+    subprocess.Popen([sys.executable, LIGHT, "watch", sid, token, str(since_ms)],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **detach)
+
+def cmd_watch(sid, token, since_ms):
+    since, path, seen, end = int(since_ms), None, None, time.time() + 6 * 3600
+    while time.time() < end:
+        time.sleep(0.25)
+        if store.load(store.WATCH, {}).get(sid) != token or sid not in store.load(store.MAP, {}):
+            return  # co luot moi, hoac session da ket thuc / bo gan den
+        rec = store.load(path, {}) if path else {}
+        if rec.get("sessionId") != sid or not alive(rec.get("pid")):
+            path = status_file(sid)
+            if not path:
+                return  # khong co file trang thai (Claude Code khong ghi, hoac claude da tat)
+            continue
+        status, at = rec.get("status"), rec.get("statusUpdatedAt", 0)
+        if at <= since or at == seen:
+            continue  # chua doi tu luc gui prompt (hook UserPromptSubmit da bat cam)
+        seen = at
+        state = ("ready" if status in IDLE else "busy" if status == "busy" else
+                 "wait" if status == "waiting" and rec.get("waitingFor") not in NOT_WAIT else None)
+        led = store.load(store.MAP, {}).get(sid, {}).get("led")
+        store.log("status=%s/%s sid=%s" % (status, rec.get("waitingFor"), sid[:8]))
+        if state and led is not None:
+            board.send("%d:%s" % (led, state))
+        if status in IDLE:
+            return
