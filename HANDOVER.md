@@ -4,7 +4,7 @@
 
 ## 1. Mục tiêu
 - Một thiết bị USB cắm vào máy, mỗi đèn RGB ứng với một session Claude Code.
-- Màu: **xanh lá** = sẵn sàng (không có luồng chạy) · **cam** = đang chạy (đổi từ xanh dương, 30/10/2026) · **tắt** = chưa có session nào gắn · **đỏ nhấp nháy** = bị block, có câu hỏi/xin quyền cần người xử lý.
+- Màu: **xanh lá** = sẵn sàng (không có luồng chạy) · **cam** = đang chạy (đổi từ xanh dương, 30/10/2026) · **hiệu ứng nền** (mặc định chấm xanh lơ quét qua lại, từ 01/11/2026; trước đó tắt) = chưa có session nào gắn · **đỏ nhấp nháy** = bị block, có câu hỏi/xin quyền cần người xử lý.
 - Đóng gói thành plugin Claude Code: hooks tự bắn trạng thái, slash command để gán đèn thủ công, ngắt tự động khi session kết thúc.
 - 8 đèn: dùng cả 8 bóng của thanh CJMCU-2812-8.
 
@@ -34,6 +34,7 @@ claude-light/                   # marketplace "chuxuanthang-plugins", repo publi
 ├── README.md                   # trang giới thiệu trên GitHub, chi tiết trỏ sang code/README.md
 ├── LICENSE                     # MIT
 ├── tests/light-edge-cases.py   # test các ca biên của light.py, không cần board: python3 tests/light-edge-cases.py
+├── tests/firmware-effects.py   # chạy code.py trên CPython với board/neopixel/supervisor giả: hiệu ứng, lệnh, nhấp nháy
 └── code/                       # plugin "session-light" (= ${CLAUDE_PLUGIN_ROOT})
     ├── firmware/code.py        # CircuitPython, chép vào ổ CIRCUITPY
     ├── .claude-plugin/plugin.json
@@ -43,22 +44,29 @@ claude-light/                   # marketplace "chuxuanthang-plugins", repo publi
     ├── scripts/light_serial.py # tìm cổng, usbipd attach, gửi lệnh xuống board
     ├── scripts/light_sessions.py # gán session ↔ đèn (map, pending, muted), tên session
     ├── scripts/light_watch.py  # tiến trình nền theo dõi sessions/<pid>.json trong lượt
-    ├── commands/usb-connect.md, usb-disconnect.md, usb-status.md
+    ├── scripts/light_display.py # độ sáng, hiệu ứng đèn trống (lưu config, gửi bri:/fx:)
+    ├── commands/usb-connect.md, usb-disconnect.md, usb-status.md, usb-brightness.md, usb-fx.md
     └── README.md               # hướng dẫn cài & dùng
 ```
 Thư viện cần trên board: `lib/neopixel.mpy` (đã chép). Trên máy: `pip install pyserial`. Hook và command gọi `python3`.
 
 ### Giao thức serial (host → board)
-Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | off | #RRGGBB`. Đã thử màu trắng cho đèn chưa gắn session nhưng chói quá nên bỏ. `all:<state>` cho mọi đèn. `ping` → `pong`. Board trả `ok` / `err` (host không cần đọc). Dùng cổng serial console của CircuitPython (không có boot.py, 1 cổng COM). Board nhận diện qua VID `0x2E8A` hoặc mô tả chứa "CircuitPython".
+Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | off | #RRGGBB`. Đã thử màu trắng cho đèn chưa gắn session nhưng chói quá nên bỏ. `all:<state>` cho mọi đèn. `fx:<scan|rainbow|breathe|none>` chọn hiệu ứng cho đèn `off`, `bri:<0–100>` đặt độ sáng các đèn có session. `ping` → `pong`. Board trả `ok` / `err` (host không cần đọc). Dùng cổng serial console của CircuitPython (không có boot.py, 1 cổng COM). Board nhận diện qua VID `0x2E8A` hoặc mô tả chứa "CircuitPython".
 
 ### Firmware (`code.py`)
 - Hằng số đầu file: `PIN = board.GP29`, `NUM_LEDS = 8`, `BRIGHTNESS = 0.05` (5%, chọn ngày 31/10/2026 sau khi xem thử 5–100%). Chỉ dùng LED onboard: `board.GP16`, `1`.
 - `COLORS` / `BLINK` ngay đầu file để đổi màu và nhấp nháy. `wait` nhấp nháy chu kỳ 0,5 s. `busy` là cam `(255, 90, 0)`: `(255, 60, 0)` trên thanh LED trông gần như đỏ, nhiều xanh lá hơn nữa thì ngả vàng.
-- Vòng lặp đọc `sys.stdin` không chặn qua `supervisor.runtime.serial_bytes_available`.
+- Vòng lặp đọc `sys.stdin` không chặn qua `supervisor.runtime.serial_bytes_available`, vẽ lại cả thanh mỗi 20 ms.
+- `px.brightness` để 1.0, độ sáng nhân tay theo từng đèn bằng `dim()` (làm tròn xuống như neopixel): đèn có session theo `bri` (lệnh `bri:`), đèn chạy hiệu ứng cố định `FX_BRIGHTNESS = 0.05`.
+- Đã thử và bỏ (01/11/2026): WS2812 chỉ có 8 bit mỗi kênh, ở 5% chỉ còn khoảng 13 mức nên `breathe` và `scan` mờ dần hơi nhảy bậc. Đã thử dither (làm tròn lên/xuống xen kẽ mỗi khung, vẽ mỗi 5 ms) kèm bình phương độ sáng: trên board nháy khó chịu hơn, nên quay về làm tròn xuống. Hiệu ứng `firefly` (đốm xanh/tím lóe lên rồi tắt) cũng bỏ vì không đẹp.
+- Đèn `off` chạy hiệu ứng nền (`IDLE_FX`, mặc định `scan`). Hiệu ứng chỉ dùng xanh dương, tím, xanh lơ để khỏi lẫn với đèn trạng thái, trừ `rainbow`. `scan` chạy trên dãy đèn trống, nhảy qua đèn đang gắn session.
+- Đồng hồ hiệu ứng lấy `time.monotonic_ns()` modulo 3600 s, vì `time.monotonic()` là float 30 bit, board chạy vài ngày là hiệu ứng bị giật. Mọi chu kỳ chia hết 3600 nên lúc quay vòng không bị nhảy.
+- `handle()` và `render()` trong vòng lặp chính được bọc `try/except`: lỗi thoát khỏi vòng lặp là board đứng hình, không nhận lệnh đến khi cắm lại. Hiệu ứng lỗi thì chuyển sang `none`.
+- Nhấp nháy tính pha riêng từng đèn từ lúc đèn nhận trạng thái (`since`), nên đèn vừa chuyển sang `wait` sáng ngay, không rơi vào nửa chu kỳ tối.
 
-### Host (`scripts/light.py` + 4 module `light_*.py`)
+### Host (`scripts/light.py` + 5 module `light_*.py`)
 - Tách khỏi một file gần 400 dòng ngày 31/10/2026 (bản 0.2.12) cho mỗi file dưới 200 dòng. Tên module dùng gạch dưới vì Python không import được tên có gạch ngang. Module gọi nhau qua thuộc tính module (`board.send`, `store.MAP`), nên test chỉ cần thay một chỗ: `tests/light-edge-cases.py` gắn bản giả vào `L.board` / `L.store`.
-- Trạng thái lưu ở `~/.claude-light/`: `config.json` (`port`, `num_leds`, `auto_assign`, `debug`), `map.json` (`session_id → {led, cwd}`), `pending.json` (`cwd → led`), `muted.json` (cwd và session_id đã disconnect), `lock`, `log.txt` khi `debug: true`.
+- Trạng thái lưu ở `~/.claude-light/`: `config.json` (`port`, `num_leds`, `auto_assign`, `debug`, `brightness`, `idle_fx`), `map.json` (`session_id → {led, cwd}`), `pending.json` (`cwd → led`), `muted.json` (cwd và session_id đã disconnect), `lock`, `log.txt` khi `debug: true`.
 - Mọi lần đọc-ghi map/pending/muted đều nằm trong `locked()` (`fcntl.flock` trên file `lock`), nên nhiều session mở cùng lúc không ghi đè map của nhau. Windows không có `fcntl` nên chạy không khóa.
 - Mỗi hook cập nhật `cwd` của session trong map, nên session `cd` sang thư mục khác thì slash command vẫn tìm thấy.
 - Ánh xạ sự kiện → trạng thái: `SessionStart`→ready, `UserPromptSubmit`/`PreToolUse`/`PostToolUse`/`PostToolUseFailure`→busy, `PostToolUseFailure` có `is_interrupt: true`→ready, ngoài hook thì tiến trình `light.py watch` đọc trạng thái phiên trong `~/.claude/sessions/<pid>.json` và đổi đèn khi trạng thái đổi sau lúc gửi prompt (`waiting` trừ `dialog open`→wait, `busy`→busy, `idle`/`shell`→ready rồi thoát), nhờ vậy bắt được Esc/Ctrl+C và lúc vừa duyệt quyền, `PermissionRequest`→wait, `PreToolUse` của `AskUserQuestion`→wait, `Notification`→wait khi `notification_type` là `permission_prompt`/`elicitation_dialog`, →ready khi là `idle_prompt`, `Stop`/`StopFailure`→ready, `SessionEnd`→off + bỏ gán (bỏ qua nếu session chưa gán đèn). `SessionEnd` có `reason: clear` thì ghi đèn vào `pending` theo cwd, để session mới do `/clear` tạo ra (session_id mới) nhận lại đúng đèn đó.
@@ -76,7 +84,7 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 - [x] Mô phỏng chuỗi sự kiện hook bằng JSON giả: đèn ra đúng trạng thái ở cả 12 ca.
 - [x] Nạp plugin vào Claude Code (`claude --plugin-dir ~/code/claude-light/code`). Session thật đã tự gán đèn 0, AskUserQuestion làm đèn đỏ nhấp nháy, lệnh status chạy được.
 - [x] Sửa các ca biên (30/10/2026): session `cd` thì `disconnect` báo thành công nhưng không bỏ gán, `connect` để lại `pending` treo; hai session cùng thư mục bị gán chung một đèn và bị bỏ gán cùng nhau; `/clear` làm mất hoặc đổi đèn đã chọn; nhiều session mở cùng lúc ghi đè map. `tests/light-edge-cases.py` có 15 ca, trước khi sửa 12 ca lỗi, sau khi sửa pass hết.
-- [x] Sửa lỗi session mới giành đèn đang bận (30/10/2026): `pending` bị treo (vd `/clear` sau khi `cd`, `SessionEnd` ghi theo thư mục con) khiến session mới mở ở thư mục đó đẩy session đang chạy ra. Thêm ca thứ 16 vào test. Bản cài nằm ở `~/.claude/plugins/cache/chuxuanthang-plugins/session-light/<version>/`, không đọc thẳng thư mục nguồn: sửa code phải tăng `version` trong `plugin.json` rồi chạy `claude plugin marketplace update chuxuanthang-plugins && claude plugin update session-light@chuxuanthang-plugins`. Hiện là 0.2.12 (0.2.2–0.2.3 thêm tên session vào `status`, 0.2.4–0.2.5 in tiếng Việt có dấu, kể cả mô tả lệnh và plugin; 0.2.6 `status` chỉ in trạng thái từng đèn, bỏ dòng chờ gán và không tự gán; 0.2.7 mặc định `num_leds: 8` theo thanh LED; 0.2.8 sửa lệnh đầu bị rơi sau khi attach; 0.2.9–0.2.10 bắt Esc/Ctrl+C; 0.2.11 đổi đèn ngay khi duyệt quyền; 0.2.12 tách `light.py` thành module, tiến trình `watch` thoát khi `claude` đã tắt).
+- [x] Sửa lỗi session mới giành đèn đang bận (30/10/2026): `pending` bị treo (vd `/clear` sau khi `cd`, `SessionEnd` ghi theo thư mục con) khiến session mới mở ở thư mục đó đẩy session đang chạy ra. Thêm ca thứ 16 vào test. Bản cài nằm ở `~/.claude/plugins/cache/chuxuanthang-plugins/session-light/<version>/`, không đọc thẳng thư mục nguồn: sửa code phải tăng `version` trong `plugin.json` rồi chạy `claude plugin marketplace update chuxuanthang-plugins && claude plugin update session-light@chuxuanthang-plugins`. Hiện là 0.2.15 (0.2.2–0.2.3 thêm tên session vào `status`, 0.2.4–0.2.5 in tiếng Việt có dấu, kể cả mô tả lệnh và plugin; 0.2.6 `status` chỉ in trạng thái từng đèn, bỏ dòng chờ gán và không tự gán; 0.2.7 mặc định `num_leds: 8` theo thanh LED; 0.2.8 sửa lệnh đầu bị rơi sau khi attach; 0.2.9–0.2.10 bắt Esc/Ctrl+C; 0.2.11 đổi đèn ngay khi duyệt quyền; 0.2.12 tách `light.py` thành module, tiến trình `watch` thoát khi `claude` đã tắt; 0.2.13–0.2.15 thêm hiệu ứng đèn trống, `/usb-brightness`, `/usb-fx`).
 - [ ] Kiểm chứng trên session thật: lệnh `!` trong slash command có thấy `CLAUDE_CODE_SESSION_ID` không, sau `/clear` biến này có đổi sang id mới không, và `SessionStart` sau `/clear` có cùng cwd với `SessionEnd` không. Nếu không thấy biến thì code đoán theo cwd như cũ.
 - [x] Đã cài qua marketplace local ở cấp user: `claude plugin marketplace add ~/code/claude-light` rồi `claude plugin install session-light@chuxuanthang-plugins` (trước 30/10/2026 tên marketplace là `thangcx-plugins`). Session `claude` thường, không cờ, gọi được `/session-light:usb-status`.
 - [x] Đưa lên GitHub: repo public `chuxuanthang/session-light`, dùng tài khoản cá nhân `chuxuanthang`, không dùng `thangcx-3383`. Git cấu hình riêng cho repo (`git config --local`): user `chuxuanthang`, email `tl.thang244@gmail.com`. Remote `git@github-per:chuxuanthang/session-light.git`: `github-per` là alias SSH trong `~/.ssh/config` dùng key `chuxuanthang`. `gh` trên máy đăng nhập `thangcx-3383` nên repo được tạo trên web. Máy khác cài bằng `claude plugin marketplace add chuxuanthang/session-light`.
@@ -94,6 +102,7 @@ Mỗi dòng `<đèn>:<trạng thái>\n`. Trạng thái: `ready | busy | wait | o
 - [x] Đóng (31/10/2026): không cần kiểm chứng `PostToolUseFailure` (`is_interrupt`) có chạy khi ngắt lúc tool đang chạy hay không, vì từ 0.2.10 tiến trình `watch` bắt mọi kiểu ngắt qua file trạng thái phiên. Hook này vẫn giữ, chạy được thì đèn về xanh sớm hơn một chút.
 - [x] Tách `light.py` thành `light.py` + `light_store` / `light_serial` / `light_sessions` / `light_watch` (0.2.12), không đổi hành vi: 22/22 test, chạy thật `status`, `send ping` và luồng hook đỏ → cam → xanh bằng session giả.
 - [x] Tiến trình `watch` chạy thừa đến 6 giờ khi `claude` bị tắt ngang (đóng terminal, không có `SessionEnd`): file `sessions/<pid>.json` của tiến trình chết vẫn ghi `busy`. Sửa 31/10/2026: chỉ đọc file có `pid` còn sống (`os.kill(pid, 0)`; trên Windows bỏ qua vì lệnh này gửi Ctrl+C), không còn file nào thì thoát. Mỗi lần `claude -c` là một tiến trình mới cùng `sessionId`, nên lọc theo `pid` cũng tránh đọc nhầm file cũ.
+- [x] Hiệu ứng nền cho đèn chưa gắn session và đổi độ sáng (01/11/2026, bản 0.2.13–0.2.15). Firmware có 3 hiệu ứng (`scan` mặc định, `rainbow`, `breathe`) và `none`, đổi bằng `fx:` không cần nạp lại; `bri:` chỉ đổi độ sáng đèn có session, đèn hiệu ứng giữ 5% (0.2.15, theo yêu cầu; bỏ `firefly` và dither cùng lúc). Host lưu `brightness`, `idle_fx` vào config, gửi lại ở mọi `SessionStart` (kèm lệnh trạng thái nếu session có đèn) vì board cắm lại là mất. Slash command `/session-light:usb-brightness`, `/session-light:usb-fx`. Review xong thì thêm `try/except` cho vòng lặp, chặn chỉ số `wheel()` ≤ 5, và cho nhấp nháy sáng ngay lúc nhận. Kiểm chứng: `light-edge-cases.py` 23/23 (thêm ca đổi độ sáng/hiệu ứng), `firmware-effects.py` 4/4 (mọi màu trong 0–255, qua mốc 3600 s không lỗi, lệnh sai trả `err`, `wait` sáng ngay; ca này fail với bản nhấp nháy theo pha chung). Từ 0.2.15 firmware không đổi `px.brightness` nữa nên không phụ thuộc phiên bản `lib/neopixel.mpy`. Bản 0.2.14 đã chạy trên board; bản 0.2.15 chưa nạp.
 - [ ] Bọc ống co nhiệt, gắn đầu chuyển.
 
 ## 5. Kết quả đối chiếu docs Claude Code (code.claude.com, 30/10/2026)

@@ -7,7 +7,7 @@ Plugin Claude Code điều khiển đèn USB báo trạng thái từng session. 
 | Xanh lá | Sẵn sàng, Claude đã trả lời xong |
 | Cam | Đang chạy |
 | Đỏ nhấp nháy | Chờ bạn trả lời câu hỏi hoặc duyệt quyền |
-| Tắt | Chưa có session nào gắn vào đèn |
+| Hiệu ứng nền (mặc định chấm xanh lơ quét qua lại) | Chưa có session nào gắn vào đèn |
 
 ## Cách hoạt động
 Hook của Claude Code gọi `code/scripts/light.py` mỗi khi có sự kiện (gửi prompt, chạy tool, xin quyền, trả lời xong, thoát). Script gửi một dòng `<đèn>:<trạng thái>` qua cổng serial xuống board RP2040 chạy CircuitPython.
@@ -20,7 +20,7 @@ Session mới mở sẽ tự lấy đèn còn trống đầu tiên. Đèn đang 
 - Máy tính có `python3` và `pyserial` (`pip install pyserial`). Đã chạy thật trên WSL2 qua usbipd-win; Linux và macOS dùng cùng mã nên sẽ chạy được nhưng chưa thử.
 
 ## Cài đặt
-1. Chép `code/firmware/code.py` vào ổ CIRCUITPY. Thanh LED nháy 3 màu rồi tắt là firmware đã chạy.
+1. Chép `code/firmware/code.py` vào ổ CIRCUITPY. Thanh LED nháy 3 màu rồi chạy hiệu ứng quét là firmware đã chạy.
 2. Cài plugin một lần ở cấp user:
    ```
    claude plugin marketplace add chuxuanthang/session-light
@@ -36,8 +36,10 @@ WSL2, Windows chạy thẳng, đổi chân LED hay số đèn: xem [`code/README
 | `/session-light:usb-connect [n]` | Gán session hiện tại vào đèn `n` (0–7, mặc định 0), đẩy session đang giữ đèn đó ra |
 | `/session-light:usb-disconnect` | Bỏ gán và tắt đèn; thư mục này không tự gán lại đến khi `usb-connect` |
 | `/session-light:usb-status` | In từng đèn đang gán cho session nào, theo tên session trên tab terminal |
+| `/session-light:usb-brightness [0–100]` | Đổi độ sáng các đèn có session theo phần trăm (mặc định 5), bỏ trống để xem độ sáng hiện tại. Đèn chạy hiệu ứng luôn giữ 5% |
+| `/session-light:usb-fx [tên]` | Đổi hiệu ứng của đèn chưa gắn session: `scan` (sóng quét, mặc định), `rainbow` (cầu vồng), `breathe` (thở màu), `none` (tắt) |
 
-Cấu hình nằm ở `~/.claude-light/config.json`: `port`, `num_leds` (mặc định 8), `auto_assign`, `debug`.
+Cấu hình nằm ở `~/.claude-light/config.json`: `port`, `num_leds` (mặc định 8), `auto_assign`, `debug`, `brightness` (mặc định 5), `idle_fx` (mặc định `scan`). Board quên độ sáng và hiệu ứng mỗi lần cắm lại, nên lúc mở session plugin gửi lại hai giá trị này.
 
 ## Theo dõi trạng thái ngoài hook
 Có hai lúc Claude Code không chạy hook nào: bấm Esc hoặc Ctrl+C giữa chừng (`Stop` không chạy), và lúc bạn vừa duyệt quyền (hook kế tiếp chỉ đến khi tool chạy xong). Plugin xử lý bằng cách mỗi lượt chạy một tiến trình nhỏ ở nền đọc file trạng thái Claude Code ghi cho từng phiên (`~/.claude/sessions/<pid>.json`), rồi đổi đèn theo mỗi lần trạng thái đổi: `waiting` thì đỏ, `busy` thì cam, `idle` thì xanh và thoát.
@@ -46,6 +48,7 @@ File này là file nội bộ của Claude Code. Bản nào không ghi file này
 
 ## Phát triển
 - Test các ca biên, không cần board: `python3 tests/light-edge-cases.py`
+- Test firmware trên máy tính (giả lập `board`/`neopixel`): `python3 tests/firmware-effects.py`
 - Claude Code chạy bản chép trong `~/.claude/plugins/cache/`. Sửa code xong phải tăng `version` trong `code/.claude-plugin/plugin.json` rồi cập nhật plugin, chi tiết trong [`code/README.md`](code/README.md).
 - Ghi chú phần cứng, quyết định thiết kế và việc còn dở: [`HANDOVER.md`](HANDOVER.md).
 

@@ -119,7 +119,7 @@ hook("SessionEnd", "A", XC, reason="clear")   # pending ghi theo XC
 hook("SessionStart", "A2", X, source="clear")  # A2 o X: pending XC bi treo
 SENT.clear()
 hook("SessionStart", "B", XC)             # session moi tu gan: khong duoc gianh den cua A2
-check("session moi khong gianh den dang bi chiem", led("A2") == 0 and "B" not in m() and SENT == [],
+check("session moi khong gianh den dang bi chiem", led("A2") == 0 and "B" not in m() and SENT == ["bri:5\nfx:scan"],
       "map=%s pending=%s sent=%s" % (m(), p(), SENT))
 
 fresh(num_leds=1)
@@ -218,6 +218,17 @@ fresh()
 for raw in ("", "not json", "{}", '{"hook_event_name":"Stop"}'):
     sys.stdin = io.StringIO(raw); L.cmd_hook()
 check("stdin rong/sai", SENT == [], "sent=%s" % SENT)
+
+# Do sang / hieu ung den trong: luu config, board cam lai la mat nen gui lai luc mo session
+fresh()
+outs = [cmd(L.display.cmd_brightness, X, None, v) for v in ("30%", "101", "abc")]
+outs += [cmd(L.display.cmd_fx, X, None, v) for v in ("breathe", "firefly")]  # firefly da bo
+sent = list(SENT); SENT.clear()
+hook("SessionStart", "A", X)
+check("doi do sang va hieu ung, gui lai luc mo session",
+      sent == ["bri:30", "fx:breathe"] and (S.cfg()["brightness"], S.cfg()["idle_fx"]) == (30, "breathe")
+      and SENT == ["bri:30\nfx:breathe\n0:ready"],
+      "in %r, sent=%s, cfg=%s, mo session gui %s" % (outs, sent, S.cfg(), SENT))
 
 # Lan mo cong dau sau attach, tty con ECHO nen doi status bar CircuitPython xuong board,
 # rac nam san trong buf: lenh that van phai den board thanh mot dong rieng

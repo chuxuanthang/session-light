@@ -41,7 +41,8 @@ def locked():
         yield
 
 def cfg():
-    c = {"port": None, "num_leds": 8, "auto_assign": True, "debug": False}
+    c = {"port": None, "num_leds": 8, "auto_assign": True, "debug": False,
+         "brightness": 5, "idle_fx": "scan"}
     c.update(load(CONFIG, {}))
     if not os.path.exists(CONFIG):
         save(CONFIG, c)

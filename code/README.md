@@ -1,15 +1,15 @@
 # session-light
 
-Đèn USB báo trạng thái session Claude Code: xanh lá = sẵn sàng, cam = đang chạy, đỏ nhấp nháy = cần bạn xác nhận, tắt = chưa có session nào gắn.
+Đèn USB báo trạng thái session Claude Code: xanh lá = sẵn sàng, cam = đang chạy, đỏ nhấp nháy = cần bạn xác nhận. Đèn chưa gắn session chạy hiệu ứng nền, mặc định là một chấm xanh lơ quét qua lại.
 
 ## 1. Board (một lần)
-1. Chép `firmware/code.py` vào ổ CIRCUITPY (ghi đè code.py cũ). Thanh LED nháy 3 màu rồi tắt là firmware chạy. Nếu báo chống ghi ("write protected"), rút board ra cắm lại rồi chép ngay bên Windows.
+1. Chép `firmware/code.py` vào ổ CIRCUITPY (ghi đè code.py cũ). Thanh LED nháy 3 màu rồi chạy hiệu ứng quét là firmware chạy. Nếu báo chống ghi ("write protected"), rút board ra cắm lại rồi chép ngay bên Windows.
 2. Firmware lái thanh 8 bóng ở GP29, khớp với `num_leds` mặc định là 8 trong `~/.claude-light/config.json`. Máy đã cài bản trước 0.2.7 thì config đã lưu `num_leds: 1`, sửa tay thành 8. Chỉ dùng LED onboard thì sửa 2 dòng đầu code.py thành `PIN = board.GP16`, `NUM_LEDS = 1` và đặt `num_leds` là 1.
 
 ## 2. Máy tính
 ```
 pip install pyserial
-python3 scripts/light.py test     # LED phải đổi màu xanh lá -> cam -> đỏ -> tắt
+python3 scripts/light.py test     # LED phải đổi màu xanh lá -> cam -> đỏ -> về hiệu ứng nền
 python3 scripts/light.py status
 ```
 Nếu `test` không đổi màu: đóng Thonny / serial monitor (đang giữ cổng), hoặc ghi cứng cổng vào `~/.claude-light/config.json`: `"port": "COM5"` (Linux/WSL: `"/dev/ttyACM0"`).
@@ -40,10 +40,13 @@ Lúc phát triển, thử nhanh mà không cài: `claude --plugin-dir /duong/dan
 - `/session-light:usb-connect 2` gán session ở thư mục hiện tại vào đèn 2 (đẩy session cũ ra nếu đèn đang bận). Số đèn từ 0 đến 7 với thanh 8 bóng; bỏ trống thì gán vào đèn 0.
 - `/session-light:usb-disconnect` gỡ đèn và tắt. Thư mục đó sẽ không được tự gán lại đến khi bạn `usb-connect` lần nữa.
 - `/session-light:usb-status` xem đèn nào gán cho session nào: in tên session (đúng tên trên tab terminal, tên đặt bằng `/rename` được ưu tiên) kèm thư mục. Session chưa có tên thì chỉ in thư mục.
+- `/session-light:usb-brightness 20` đặt độ sáng các đèn có session 20%. Mặc định 5%, dưới 5% thì màu bị lệch (cam dễ lẫn với đỏ), 0 là tắt hẳn các đèn này. Đèn chạy hiệu ứng luôn giữ 5%. Bỏ trống số để xem độ sáng hiện tại.
+- `/session-light:usb-fx scan` đổi hiệu ứng của đèn chưa gắn session: `scan` (chấm sáng quét qua lại, mặc định), `rainbow` (cầu vồng xoay, có lúc ra đỏ/cam/xanh lá nên dễ lẫn với đèn trạng thái), `breathe` (thở màu xanh dương, tím), `none` (tắt). Bỏ trống tên để xem danh sách.
+- Hai giá trị trên lưu ở `brightness` và `idle_fx` trong config. Board quên chúng mỗi lần cắm lại, nên `SessionStart` gửi lại kèm lệnh trạng thái.
 - Bật `"debug": true` trong config để ghi `~/.claude-light/log.txt` khi cần soi.
 
 Bấm Esc hoặc Ctrl+C giữa chừng thì Claude Code không chạy hook nào (`Stop` không chạy); duyệt quyền xong cũng không có hook nào cho đến khi tool chạy xong. Vì vậy mỗi lượt (`UserPromptSubmit`), `light.py` bật một tiến trình nền `light.py watch` đọc `~/.claude/sessions/<pid>.json`, file Claude Code ghi trạng thái phiên, và đổi đèn theo mỗi lần trạng thái đổi sau lúc gửi prompt: `waiting` (trừ `dialog open`, tức hộp thoại bạn tự mở như `/model`) thì đỏ, `busy` thì cam, `idle` thì xanh rồi thoát. Có lượt mới hoặc session đã đóng thì cũng thoát.
 
 
 ## Giao thức xuống board
-Mỗi dòng `<đèn>:<trạng thái>`: `0:ready`, `0:busy`, `0:wait`, `0:off`, `all:off`, `0:#ff00ff`, `ping`.
+Mỗi dòng `<đèn>:<trạng thái>`: `0:ready`, `0:busy`, `0:wait`, `0:off`, `all:off`, `0:#ff00ff`, `ping`. Đèn `off` chạy hiệu ứng nền, đổi bằng `fx:scan | rainbow | breathe | none`. Độ sáng các đèn có session: `bri:<0–100>`, đèn hiệu ứng giữ 5%.

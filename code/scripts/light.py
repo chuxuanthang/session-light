@@ -8,18 +8,22 @@ Cach dung:
   light.py disconnect        bo gan cho thu muc hien tai, tat den
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
+  light.py brightness [0-100]  doi do sang den co session (phan tram), bo trong de xem
+  light.py fx [ten]          doi hieu ung den trong: scan | rainbow | breathe | none
   light.py send <n>:<state>  gui lenh tho (debug)
   light.py watch ...         (noi bo) theo doi trang thai session trong luot
 
 File cau hinh: ~/.claude-light/config.json
-  {"port": null, "num_leds": 8, "auto_assign": true, "debug": false}
+  {"port": null, "num_leds": 8, "auto_assign": true, "debug": false, "brightness": 5, "idle_fx": "scan"}
 
 Module cung thu muc: light_store (file, cau hinh, log), light_serial (cong serial, usbipd),
-light_sessions (gan session voi den), light_watch (theo doi trang thai ngoai hook).
+light_sessions (gan session voi den), light_watch (theo doi trang thai ngoai hook),
+light_display (do sang, hieu ung den trong).
 """
 import sys, os, json, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # nap duoc ca khi import tu noi khac (test)
 import light_store as store, light_serial as board, light_sessions as sessions, light_watch as watch
+import light_display as display
 
 EVENT_STATE = {
     "SessionStart": "ready",
@@ -64,8 +68,13 @@ def cmd_hook():
             led = sessions.end_session(sid, cwd, data.get("reason"))
         else:
             led = sessions.led_for(sid, cwd)
+    # board quen do sang / hieu ung moi lan cam lai: gui lai luc mo session, ke ca session khong co den
+    lines = [display.settings_line()] if event == "SessionStart" else []
     if led is not None:
-        board.send("%d:%s" % (led, state))
+        lines.append("%d:%s" % (led, state))
+    if lines:
+        board.send("\n".join(lines))
+    if led is not None:
         if event == "UserPromptSubmit":
             watch.watch_turn(sid, started)
 
@@ -162,6 +171,10 @@ if __name__ == "__main__":
             cmd_status()
         elif args[0] == "test":
             cmd_test()
+        elif args[0] == "brightness":
+            display.cmd_brightness(args[1] if len(args) > 1 else None)
+        elif args[0] == "fx":
+            display.cmd_fx(args[1] if len(args) > 1 else None)
         elif args[0] == "watch" and len(args) > 3:
             watch.cmd_watch(*args[1:4])
         elif args[0] == "send" and len(args) > 1:
