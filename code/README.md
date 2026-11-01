@@ -41,7 +41,7 @@ Lúc phát triển, thử nhanh mà không cài: `claude --plugin-dir /duong/dan
 - `/session-light:usb-disconnect` gỡ đèn và tắt. Thư mục đó sẽ không được tự gán lại đến khi bạn `usb-connect` lần nữa.
 - `/session-light:usb-status` xem đèn nào gán cho session nào: in tên session (đúng tên trên tab terminal, tên đặt bằng `/rename` được ưu tiên) kèm thư mục. Session chưa có tên thì chỉ in thư mục.
 - `/session-light:usb-brightness 20` đặt độ sáng các đèn có session 20%. Mặc định 5%, dưới 5% thì màu bị lệch (cam dễ lẫn với đỏ), 0 là tắt hẳn các đèn này. Đèn chạy hiệu ứng luôn giữ 5%. Bỏ trống số để xem độ sáng hiện tại.
-- `/session-light:usb-fx scan` đổi hiệu ứng của đèn chưa gắn session: `scan` (chấm sáng quét qua lại, mặc định), `rainbow` (cầu vồng xoay, có lúc ra đỏ/cam/xanh lá nên dễ lẫn với đèn trạng thái), `breathe` (thở màu xanh dương, tím), `none` (tắt). Bỏ trống tên để xem danh sách.
+- `/session-light:usb-fx 1` (hoặc `/session-light:usb-fx scan`) đổi hiệu ứng của đèn chưa gắn session, gõ số hoặc tên: `0` `none` (tắt), rồi từ `1`: `scan` (chấm sáng quét qua lại, mặc định), `rainbow` (cầu vồng xoay, có lúc ra đỏ/cam/xanh lá nên dễ lẫn với đèn trạng thái), `breathe` (thở màu xanh dương, tím), `chase` (đèn Noel: cứ 3 bóng sáng 1, chạy dần, xen kẽ xanh dương / tím), `comet` (sao băng kéo đuôi chạy một chiều), `wave` (sóng màu chỉ trong dải xanh lơ, xanh dương, tím), `heart` (nhịp tim tím hồng, hai nhịp rồi nghỉ). Số 1–7 theo đúng thứ tự này. Bỏ trống để xem danh sách kèm số.
 - Hai giá trị trên lưu ở `brightness` và `idle_fx` trong config. Board quên chúng mỗi lần cắm lại, nên `SessionStart` gửi lại kèm lệnh trạng thái.
 - Bật `"debug": true` trong config để ghi `~/.claude-light/log.txt` khi cần soi.
 
@@ -49,4 +49,4 @@ Bấm Esc hoặc Ctrl+C giữa chừng thì Claude Code không chạy hook nào 
 
 
 ## Giao thức xuống board
-Mỗi dòng `<đèn>:<trạng thái>`: `0:ready`, `0:busy`, `0:wait`, `0:off`, `all:off`, `0:#ff00ff`, `ping`. Đèn `off` chạy hiệu ứng nền, đổi bằng `fx:scan | rainbow | breathe | none`. Độ sáng các đèn có session: `bri:<0–100>`, đèn hiệu ứng giữ 5%.
+Mỗi dòng `<đèn>:<trạng thái>`: `0:ready`, `0:busy`, `0:wait`, `0:off`, `all:off`, `0:#ff00ff`, `ping`. Đèn `off` chạy hiệu ứng nền, đổi bằng `fx:none | scan | rainbow | breathe | chase | comet | wave | heart`. Độ sáng các đèn có session: `bri:<0–100>`, đèn hiệu ứng giữ 5%.

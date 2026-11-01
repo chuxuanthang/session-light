@@ -37,7 +37,7 @@ WSL2, Windows chạy thẳng, đổi chân LED hay số đèn: xem [`code/README
 | `/session-light:usb-disconnect` | Bỏ gán và tắt đèn; thư mục này không tự gán lại đến khi `usb-connect` |
 | `/session-light:usb-status` | In từng đèn đang gán cho session nào, theo tên session trên tab terminal |
 | `/session-light:usb-brightness [0–100]` | Đổi độ sáng các đèn có session theo phần trăm (mặc định 5), bỏ trống để xem độ sáng hiện tại. Đèn chạy hiệu ứng luôn giữ 5% |
-| `/session-light:usb-fx [tên]` | Đổi hiệu ứng của đèn chưa gắn session: `scan` (sóng quét, mặc định), `rainbow` (cầu vồng), `breathe` (thở màu), `none` (tắt) |
+| `/session-light:usb-fx [số hoặc tên]` | Đổi hiệu ứng của đèn chưa gắn session: `0` `none` (tắt), `1` `scan` (sóng quét, mặc định), `2` `rainbow` (cầu vồng), `3` `breathe` (thở màu), `4` `chase` (đèn Noel chạy), `5` `comet` (sao băng), `6` `wave` (sóng màu lạnh), `7` `heart` (nhịp tim) |
 
 Cấu hình nằm ở `~/.claude-light/config.json`: `port`, `num_leds` (mặc định 8), `auto_assign`, `debug`, `brightness` (mặc định 5), `idle_fx` (mặc định `scan`). Board quên độ sáng và hiệu ứng mỗi lần cắm lại, nên lúc mở session plugin gửi lại hai giá trị này.
 

@@ -1,7 +1,8 @@
 # CircuitPython firmware cho RP2040-Zero: den trang thai Claude Code
 # Nhan lenh qua cong serial USB, moi dong dang "<den>:<trang thai>"
 #   vi du: 0:busy   0:wait   0:ready   0:off   all:off   0:#ff00ff   ping
-# Den "off" (chua gan session) chay hieu ung trang tri: fx:scan   fx:rainbow   fx:breathe   fx:none
+# Den "off" (chua gan session) chay hieu ung trang tri:
+#   fx:none   fx:scan   fx:rainbow   fx:breathe   fx:chase   fx:comet   fx:wave   fx:heart
 # Do sang cac den co session, theo phan tram: bri:5   bri:30 (den chay hieu ung giu FX_BRIGHTNESS)
 import time, sys, math, board, neopixel, supervisor
 
@@ -20,7 +21,8 @@ COLORS = {
     "off":   (0, 0, 0),
 }
 BLINK = {"wait"}
-CYAN = (0, 110, 255)  # hieu ung tranh do / cam / xanh la de khong lan voi den trang thai (tru rainbow)
+# hieu ung tranh do / cam / xanh la de khong lan voi den trang thai (tru rainbow)
+CYAN, BLUE, VIOLET = (0, 110, 255), (0, 0, 255), (200, 0, 255)
 
 # px.brightness de 1.0, do sang nhan tay theo tung den: den co session theo bri, den hieu ung co dinh.
 # Lam tron xuong giong het thu vien neopixel lam voi px.brightness.
@@ -59,8 +61,8 @@ def scan(t, idle):
     return [dim(CYAN, max(0, 1 - abs(j - x) / 1.5)) for j in range(n)]
 
 def rainbow(t, idle):
-    # cau vong xoay mot vong het 8 s, cac den lech mau theo vi tri tren thanh
-    return [wheel(t / 8 + i / NUM_LEDS) for i in idle]
+    # cau vong xoay mot vong het 3 s, cac den lech mau theo vi tri tren thanh
+    return [wheel(t / 3 + i / NUM_LEDS) for i in idle]
 
 def breathe(t, idle):
     # sang len toi di moi 4 s, mau troi dan giua xanh duong va tim moi 12 s
@@ -68,8 +70,36 @@ def breathe(t, idle):
     m = (1 - math.cos(2 * math.pi * t / 12)) / 2
     return [dim((int(150 * m), 0, 255), k)] * len(idle)
 
-FX = {"scan": scan, "rainbow": rainbow, "breathe": breathe,
-      "none": lambda t, idle: [(0, 0, 0)] * len(idle)}
+def chase(t, idle):
+    # den Noel: cu 3 bong sang 1, dich mot bong moi 0.2 s, nhom xen ke xanh duong / tim
+    s = int(t / 0.2)  # 18000 buoc moi gio, chia het 6 nen qua moc 3600 s khong nhay
+    return [(BLUE, VIOLET)[(j - s) // 3 % 2] if (j - s) % 3 == 0 else (0, 0, 0)
+            for j in range(len(idle))]
+
+def comet(t, idle):
+    # sao bang chay mot chieu 1.5 s, keo duoi 3 bong, nghi 0.9 s roi chay lai
+    n, p = len(idle), t % 2.4 / 1.5
+    if p > 1:
+        return [(0, 0, 0)] * n
+    x = -1 + p * (n + 4)  # dau sao bang di tu -1 den n + 3 de duoi ra het khoi thanh
+    return [dim(CYAN, max(0, 1 - (x - j) / 3) if x >= j else max(0, 1 - (j - x) * 2))
+            for j in range(n)]
+
+def wave(t, idle):
+    # mau troi trong dai xanh lo - xanh duong - tim (wheel 0.5..0.8), song chay doc thanh het 4 s
+    return [wheel(0.65 - 0.15 * math.cos(2 * math.pi * (t / 4 - i / NUM_LEDS))) for i in idle]
+
+def beat(d):
+    return math.sin(math.pi * d / 0.2) if 0 <= d < 0.2 else 0
+
+def heart(t, idle):
+    # nhip tim: hai nhip "thich thich" tim hong (nhip sau nhe hon) roi nghi, 1.5 s mot chu ky
+    p = t % 1.5
+    return [dim(VIOLET, max(beat(p), 0.6 * beat(p - 0.3)))] * len(idle)
+
+# thu tu phai khop FX trong scripts/light_display.py: host danh so 0, 1, 2, ... theo thu tu do
+FX = {"none": lambda t, idle: [(0, 0, 0)] * len(idle),
+      "scan": scan, "rainbow": rainbow, "breathe": breathe, "chase": chase, "comet": comet, "wave": wave, "heart": heart}
 
 def clock():
     # giay trong gio hien tai: time.monotonic() la float 30 bit, chay vai ngay la giat;

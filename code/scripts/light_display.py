@@ -1,7 +1,9 @@
 """claude-light: do sang cac den co session va hieu ung cua cac den chua gan session."""
 import light_store as store, light_serial as board
 
-FX = {"scan": "sóng quét qua lại", "rainbow": "cầu vồng xoay", "breathe": "thở màu", "none": "tắt"}
+# thu tu = so go trong /usb-fx (0 la tat, 1, 2, ...); ten phai co trong FX cua firmware/code.py
+FX = {"none": "tắt", "scan": "sóng quét qua lại", "rainbow": "cầu vồng xoay", "breathe": "thở màu",
+      "chase": "đèn Noel chạy", "comet": "sao băng", "wave": "sóng màu lạnh", "heart": "nhịp tim"}
 NOT_SENT = ". Chưa gửi được xuống board, lần mở session sau sẽ gửi"
 
 def settings_line():
@@ -32,12 +34,15 @@ def cmd_brightness(n=None):
 
 def cmd_fx(name=None):
     name = (name or "").strip().lower()
+    names = list(FX)
+    if name.isdigit() and int(name) < len(names):  # go so theo thu tu danh sach cho nhanh
+        name = names[int(name)]
     if name not in FX:
         if name:
             print("Không có hiệu ứng %s." % name)
-        print("Hiệu ứng đèn trống: %s. Chọn một trong:" % store.cfg()["idle_fx"])
-        for k, v in FX.items():
-            print("  %-8s %s" % (k, v))
+        print("Hiệu ứng đèn trống: %s. Chọn số hoặc tên:" % store.cfg()["idle_fx"])
+        for n, (k, v) in enumerate(FX.items()):
+            print("  %d  %-8s %s" % (n, k, v))
         return
     ok = save_and_send("idle_fx", name, "fx:%s" % name)
     print("Đã đổi hiệu ứng đèn trống sang %s (%s)" % (name, FX[name]) + ("" if ok else NOT_SENT))

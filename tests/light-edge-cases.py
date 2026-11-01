@@ -222,11 +222,11 @@ check("stdin rong/sai", SENT == [], "sent=%s" % SENT)
 # Do sang / hieu ung den trong: luu config, board cam lai la mat nen gui lai luc mo session
 fresh()
 outs = [cmd(L.display.cmd_brightness, X, None, v) for v in ("30%", "101", "abc")]
-outs += [cmd(L.display.cmd_fx, X, None, v) for v in ("breathe", "firefly")]  # firefly da bo
+outs += [cmd(L.display.cmd_fx, X, None, v) for v in ("2", "0", "9", "firefly", "breathe")]  # so theo danh sach; firefly da bo
 sent = list(SENT); SENT.clear()
 hook("SessionStart", "A", X)
 check("doi do sang va hieu ung, gui lai luc mo session",
-      sent == ["bri:30", "fx:breathe"] and (S.cfg()["brightness"], S.cfg()["idle_fx"]) == (30, "breathe")
+      sent == ["bri:30", "fx:rainbow", "fx:none", "fx:breathe"] and (S.cfg()["brightness"], S.cfg()["idle_fx"]) == (30, "breathe")
       and SENT == ["bri:30\nfx:breathe\n0:ready"],
       "in %r, sent=%s, cfg=%s, mo session gui %s" % (outs, sent, S.cfg(), SENT))
 

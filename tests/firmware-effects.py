@@ -43,6 +43,14 @@ for fx in F["FX"]:
         bad += [(fx, k, c) for c in F["px"] if not all(isinstance(v, int) and 0 <= v <= 255 for v in c)]
 check("hieu ung qua moc 3600 s, mau trong 0..255", not bad, "loi: %s" % bad[:3])
 
+# host danh so hieu ung theo thu tu FX cua light_display: firmware phai co dung cac hieu ung do
+sys.path.insert(0, os.path.join(os.path.dirname(SRC), "..", "scripts"))
+import light_display
+check("host va firmware cung danh sach hieu ung, so 0-7 dung thu tu (0 la tat)",
+      list(light_display.FX) == ["none", "scan", "rainbow", "breathe", "chase", "comet", "wave", "heart"]
+      and set(light_display.FX) == set(F["FX"]),
+      "host %s, firmware %s" % (list(light_display.FX), sorted(F["FX"])))
+
 got = say("fx:breathe", "fx:firefly", "bri:30", "bri:abc", "ping")
 check("lenh fx / bri / ping, mac dinh scan, khong con firefly",
       F["IDLE_FX"] == "scan" and got == ["ok", "err", "ok", "err", "pong"] and F["fx"] == "breathe",

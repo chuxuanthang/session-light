@@ -9,7 +9,7 @@ Cach dung:
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
   light.py brightness [0-100]  doi do sang den co session (phan tram), bo trong de xem
-  light.py fx [ten]          doi hieu ung den trong: scan | rainbow | breathe | none
+  light.py fx [so|ten]       doi hieu ung den trong: 0 none | 1 scan | 2 rainbow | 3 breathe | 4 chase | 5 comet | 6 wave | 7 heart
   light.py send <n>:<state>  gui lenh tho (debug)
   light.py watch ...         (noi bo) theo doi trang thai session trong luot
 
