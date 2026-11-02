@@ -244,6 +244,42 @@ check("cam lai board: gui lai mau tung den, session da chet tra den cho session 
       and SENT == ["bri:5\nfx:scan\n0:ready\n2:ready\n3:ready\n1:wait"],  # C dang xin quyen: giu do
       "map=%s, mo session gui %s, gan lai gui %s" % (m(), sent_start, SENT))
 
+# /usb-sort: den dang gan 1 3 5 6 8 -> 1 2 3 4 5, giu thu tu. D chi con file cua tien trinh da chet: bo gan truoc,
+# khong chiem cho. Den pending (gan tay luc chua co session) cung duoc don, khong bi session khac de len
+fresh(num_leds=8)
+S.save(S.MAP, {"A": {"led": 0, "cwd": "/A"}, "B": {"led": 2, "cwd": "/B"}, "C": {"led": 4, "cwd": "/C"},
+               "D": {"led": 5, "cwd": "/D"}, "E": {"led": 7, "cwd": "/E"}})
+S.save(S.PENDING, {"/p": 6})
+os.makedirs(os.path.join(S.DIR, "sessions"))
+S.save(os.path.join(S.DIR, "sessions", "1.json"), {"sessionId": "B", "pid": os.getpid(), "status": "waiting",
+                                                   "waitingFor": "permission prompt"})
+S.save(os.path.join(S.DIR, "sessions", "2.json"), {"sessionId": "D", "pid": DEAD_PID, "status": "busy"})
+out = cmd(L.display.cmd_sort, "/C", "C")
+check("usb-sort don den ve lien nhau, giu thu tu, bo session chet",
+      {k: v["led"] for k, v in m().items()} == {"A": 0, "B": 1, "C": 2, "E": 4} and p() == {"/p": 3}
+      and out == "Đã dồn đèn 3 → 2, 5 → 3, 7 → 4, 8 → 5; session này ở đèn 3"
+      and SENT == ["bri:5\nfx:scan\n0:ready\n1:wait\n2:ready\n3:off\n4:ready\n5:off\n6:off\n7:off"],
+      "map=%s pending=%s in %r sent=%s" % (m(), p(), out, SENT))
+SENT.clear(); out = cmd(L.display.cmd_sort, "/z", None)
+check("usb-sort lan hai: da lien nhau thi khong doi", out == "Các đèn đang gán đã liền nhau từ đèn 1, không phải đổi"
+      and led("E") == 4, "in %r map=%s" % (out, m()))
+
+# /usb-swap a b: doi hai den cho nhau, ca den pending; mot ben trong thi la chuyen sang; so sai thi in cach dung
+fresh(num_leds=5)
+S.save(S.MAP, {"A": {"led": 0, "cwd": "/A"}, "B": {"led": 2, "cwd": "/B"}})
+S.save(S.PENDING, {"/p": 3})
+outs = [cmd(L.display.cmd_swap, "/A", "A", "1 3")]
+swapped = ({k: v["led"] for k, v in m().items()}, list(SENT)); SENT.clear()
+outs += [cmd(L.display.cmd_swap, "/z", None, "4,2"), cmd(L.display.cmd_swap, "/z", None, "4 5")]
+sent_ok = len(SENT); SENT.clear()
+outs += [cmd(L.display.cmd_swap, "/z", None, t) for t in ("2 2", "1 6", "3", "")]
+usage = "Cách dùng: /session-light:usb-swap <đèn> <đèn>, hai số khác nhau từ 1 đến 5"
+check("usb-swap doi hai den, ca den pending, so sai thi in cach dung",
+      swapped == ({"A": 2, "B": 0}, ["bri:5\nfx:scan\n0:ready\n1:off\n2:ready\n3:off\n4:off"]) and p() == {"/p": 1}
+      and outs == ["Đã đổi đèn 1 ↔ 3; session này ở đèn 3", "Đã đổi đèn 4 ↔ 2",
+                   "Đèn 4 và 5 đều chưa gán, không có gì để đổi"] + [usage] * 4 and sent_ok == 2 and not SENT,
+      "lan dau %s, pending=%s, in %r, sent=%s" % (swapped, p(), outs, SENT))
+
 # Tat het terminal (khong co SessionEnd) roi `claude -c`: lay den trong nho nhat tu den 1, khong giu den cu
 fresh(num_leds=3)
 S.save(S.MAP, {"B": {"led": 0, "cwd": "/y"}, "A": {"led": 1, "cwd": X}})

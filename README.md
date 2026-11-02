@@ -39,6 +39,8 @@ WSL2, Windows chạy thẳng, đổi chân LED hay số đèn: xem [`code/README
 | `/session-light:usb-disconnect` | Bỏ gán và tắt đèn; thư mục này không tự gán lại đến khi `usb-connect` |
 | `/session-light:usb-status` | In từng đèn đang gán cho session nào, theo tên session trên tab terminal |
 | `/session-light:usb-blink` | Nháy xanh lá 3 lần đèn của session hiện tại rồi trả về màu cũ, kèm in số đèn, để biết terminal này đang dùng đèn nào |
+| `/session-light:usb-sort` | Dồn các đèn đang gán về liền nhau từ đèn 1, giữ nguyên thứ tự: đang sáng 1 3 5 6 8 thì thành 1 2 3 4 5 |
+| `/session-light:usb-swap a b` | Đổi hai đèn cho nhau, vd `2 5`: session ở đèn 2 sang đèn 5 và ngược lại; một đèn đang trống thì là chuyển sang |
 | `/session-light:usb-brightness [0–100]` | Đổi độ sáng các đèn có session theo phần trăm (mặc định 5), bỏ trống để xem độ sáng hiện tại. Đèn chạy hiệu ứng luôn giữ 5% |
 | `/session-light:usb-fx [số hoặc tên]` | Đổi hiệu ứng của đèn chưa gắn session: `0` `none` (tắt), `1` `scan` (sóng quét, mặc định), `2` `rainbow` (cầu vồng), `3` `breathe` (thở màu), `4` `chase` (đèn Noel chạy), `5` `comet` (sao băng), `6` `wave` (sóng màu lạnh), `7` `heart` (nhịp tim) |
 

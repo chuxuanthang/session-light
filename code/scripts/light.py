@@ -10,6 +10,8 @@ Cach dung:
   light.py test              chay thu cac mau
   light.py brightness [0-100]  doi do sang den co session (phan tram), bo trong de xem
   light.py blink             nhay xanh la 3 lan den cua session o thu muc hien tai
+  light.py sort              don den dang gan ve lien nhau tu den 1, giu thu tu (1 3 5 -> 1 2 3)
+  light.py swap <a> <b>      doi hai den cho nhau (1-8)
   light.py fx [so|ten]       doi hieu ung den trong: 0 none | 1 scan | 2 rainbow | 3 breathe | 4 chase | 5 comet | 6 wave | 7 heart
   light.py send <n>:<state>  gui lenh tho (debug), n dem tu 0
   light.py watch ...         (noi bo) theo doi trang thai session trong luot
@@ -77,8 +79,7 @@ def cmd_hook():
         else:
             led = sessions.led_for(sid, cwd)
     if led is not None:
-        # hop thoai can nguoi con mo thi giu do: hook cua subagent chay nen (co agent_id), tool chay song song,
-        # Stop cua luot chinh luc subagent dang xin quyen. Doc file trang thai sat luc gui de it bi lech
+        # hop thoai can nguoi con mo thi giu do (hook subagent chay nen, Stop luc subagent xin quyen)
         if state in ("busy", "ready") and not data.get("is_interrupt") and watch.user_waiting(sid):
             state = "wait"
         lines.append("%d:%s" % (led, state))
@@ -156,15 +157,6 @@ def cmd_status():
         title = sessions.session_title(owner[0][0])
         print("  đèn %d: %s" % (n + 1, "%s (%s)" % (title, owner[0][1]) if title else owner[0][1]))
 
-def cmd_test():
-    board.wsl_attach()
-    c = store.cfg(); n = int(c["num_leds"])
-    for st in ("ready", "busy", "wait", "off"):
-        for i in range(n):
-            board.send("%d:%s" % (i, st)); time.sleep(0.15)
-        time.sleep(0.8)
-    print("ok" if board.find_port() else "khong tim thay board")
-
 if __name__ == "__main__":
     try:  # in tieng Viet co dau: Windows mac dinh cp1252 se loi
         sys.stdout.reconfigure(encoding="utf-8")
@@ -180,14 +172,12 @@ if __name__ == "__main__":
             cmd_disconnect()
         elif args[0] == "status":
             cmd_status()
-        elif args[0] == "test":
-            cmd_test()
-        elif args[0] == "brightness":
-            display.cmd_brightness(args[1] if len(args) > 1 else None)
-        elif args[0] == "fx":
-            display.cmd_fx(args[1] if len(args) > 1 else None)
-        elif args[0] == "blink":
-            display.cmd_blink()
+        elif args[0] in ("brightness", "fx"):  # display.cmd_brightness / cmd_fx
+            getattr(display, "cmd_" + args[0])(args[1] if len(args) > 1 else None)
+        elif args[0] in ("blink", "sort", "test"):  # display.cmd_blink / cmd_sort / cmd_test
+            getattr(display, "cmd_" + args[0])()
+        elif args[0] == "swap":
+            display.cmd_swap(" ".join(args[1:]))
         elif args[0] == "keep":
             reconnect.cmd_keep()
         elif args[0] == "watch" and len(args) > 3:

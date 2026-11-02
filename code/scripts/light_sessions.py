@@ -55,6 +55,32 @@ def end_session(session_id, cwd, reason):
         pend = store.load(store.PENDING, {}); pend[cwd] = led; store.save(store.PENDING, pend)
     return led
 
+# Sap lai den (/usb-sort, /usb-swap), goi trong store.locked(). Den trong pending (gan tay luc chua co session, hoac
+# /clear dang cho session moi) cung tinh la dang giu va doi so theo, de session mo sau khong de len den cua session khac
+
+def held_leds():
+    return {v["led"] for v in store.load(store.MAP, {}).values()} | set(store.load(store.PENDING, {}).values())
+
+def renumber(new):
+    # new: {den cu: den moi}, den khong co trong new giu nguyen
+    m, pend = store.load(store.MAP, {}), store.load(store.PENDING, {})
+    for v in m.values():
+        v["led"] = new.get(v["led"], v["led"])
+    store.save(store.MAP, m)
+    store.save(store.PENDING, {k: new.get(v, v) for k, v in pend.items()})
+
+def compact():
+    # don den dang giu ve sat ben trai, giu thu tu: 1 3 5 6 8 -> 1 2 3 4 5. Tra [(den cu, den moi)] den bi doi
+    new = {old: n for n, old in enumerate(sorted(held_leds()))}
+    renumber(new)
+    return [(old, n) for old, n in sorted(new.items()) if old != n]
+
+def swap(a, b):
+    # doi den a va b cho nhau (mot ben trong thi la chuyen sang). Tra cac den trong hai den dang duoc giu
+    held = held_leds() & {a, b}
+    renumber({a: b, b: a})
+    return held
+
 def session_title(sid):
     # ten tren tab terminal: Claude Code ghi vao transcript; ten dat bang /rename uu tien hon ten tu dat
     found = {}
