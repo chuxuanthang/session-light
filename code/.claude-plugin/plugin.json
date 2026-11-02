@@ -1,6 +1,6 @@
 {
   "name": "session-light",
   "description": "Đèn USB báo trạng thái các session Claude Code (sẵn sàng / đang chạy / chờ xác nhận)",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "author": { "name": "chuxuanthang" }
 }

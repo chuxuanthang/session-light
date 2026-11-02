@@ -46,6 +46,9 @@ EVENT_STATE = {
 # Notification: bao do khi can nguoi xu ly. idle_prompt chi ban khi Claude ranh >=60s va khong co
 # hop thoai nao, nen dua ve xanh
 WAIT_NOTIFY = {"permission_prompt", "elicitation_dialog"}
+# Stop ma con Agent/Workflow chay nen (background_tasks): Claude Code van ghi phien "busy", den giu cam. Shell nen
+# (dev server), monitor thi khong tinh, giong Claude Code
+BACKGROUND_WORK = {"subagent", "workflow"}
 
 def cmd_hook():
     try:
@@ -64,6 +67,9 @@ def cmd_hook():
         state = "ready"  # Esc/Ctrl+C luc tool dang chay: Stop khong chay
     if event == "PreToolUse" and data.get("tool_name") == "AskUserQuestion":
         state = "wait"
+    if event == "Stop" and any(isinstance(t, dict) and t.get("type") in BACKGROUND_WORK
+                               for t in data.get("background_tasks") or ()):
+        state = "busy"
     store.log("event=%s sid=%s cwd=%s" % (event, sid[:8], cwd))
     if not state or not sid:
         return

@@ -160,6 +160,18 @@ hook("Notification", "A", X, notification_type="idle_prompt")
 hook("PreToolUse", "A", X, tool_name="AskUserQuestion")
 check("idle_prompt -> ready, AskUserQuestion -> wait", SENT == ["0:ready", "0:wait"], "sent=%s" % SENT)
 
+# Stop luc agent nen con chay (moi agent xong la mot luot ngan doc bao cao roi Stop): giu cam. Shell nen (dev server)
+# khong tinh, giong Claude Code; het viec nen thi xanh
+fresh()
+hook("SessionStart", "A", X); SENT.clear()
+task = lambda kind: {"id": "t1", "type": kind, "status": "running", "description": "x"}
+hook("Stop", "A", X, background_tasks=[task("shell"), task("subagent")])
+hook("Stop", "A", X, background_tasks=[task("workflow")])
+hook("Stop", "A", X, background_tasks=[task("shell"), task("monitor")])
+hook("Stop", "A", X, background_tasks=[])
+check("Stop con agent/workflow nen -> busy, chi con shell/monitor hoac het -> ready",
+      SENT == ["0:busy", "0:busy", "0:ready", "0:ready"], "sent=%s" % SENT)
+
 # Dang hoi nguoi dung (file trang thai phien ghi "waiting") ma subagent chay nen van goi tool: hook cua no cung
 # session_id, kem agent_id. Den phai giu do; Stop cua luot chinh luc subagent dang xin quyen cung vay
 fresh()
