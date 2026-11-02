@@ -57,6 +57,12 @@ def state_of(rec):
     return ("ready" if status in IDLE else "busy" if status == "busy" else
             "wait" if status == "waiting" and rec.get("waitingFor") not in NOT_WAIT else None)
 
+def user_waiting(sid):
+    # dang co hop thoai can nguoi (cau hoi, xin quyen, ke ca cua subagent): file trang thai phien ghi "waiting"
+    # suot luc do. Subagent chay nen van ban PreToolUse/PostToolUse cung session_id, khong duoc de den do
+    path = status_file(sid)
+    return bool(path) and state_of(store.load(path, {})) == "wait"
+
 def watch_turn(sid, since_ms):
     token = "%d.%d" % (os.getpid(), since_ms)
     with store.locked():  # luot moi thay token: tien trinh cu tu thoat. Bo token cua session da ket thuc

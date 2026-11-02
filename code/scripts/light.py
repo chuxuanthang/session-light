@@ -77,6 +77,10 @@ def cmd_hook():
         else:
             led = sessions.led_for(sid, cwd)
     if led is not None:
+        # hop thoai can nguoi con mo thi giu do: hook cua subagent chay nen (co agent_id), tool chay song song,
+        # Stop cua luot chinh luc subagent dang xin quyen. Doc file trang thai sat luc gui de it bi lech
+        if state in ("busy", "ready") and not data.get("is_interrupt") and watch.user_waiting(sid):
+            state = "wait"
         lines.append("%d:%s" % (led, state))
     if lines:
         board.send("\n".join(lines))

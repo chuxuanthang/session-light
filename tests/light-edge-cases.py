@@ -160,6 +160,25 @@ hook("Notification", "A", X, notification_type="idle_prompt")
 hook("PreToolUse", "A", X, tool_name="AskUserQuestion")
 check("idle_prompt -> ready, AskUserQuestion -> wait", SENT == ["0:ready", "0:wait"], "sent=%s" % SENT)
 
+# Dang hoi nguoi dung (file trang thai phien ghi "waiting") ma subagent chay nen van goi tool: hook cua no cung
+# session_id, kem agent_id. Den phai giu do; Stop cua luot chinh luc subagent dang xin quyen cung vay
+fresh()
+hook("SessionStart", "A", X)
+os.makedirs(os.path.join(S.DIR, "sessions"))
+STATUS_A = os.path.join(S.DIR, "sessions", "1.json")
+def status_a(status, why=None):
+    S.save(STATUS_A, {"sessionId": "A", "pid": os.getpid(), "status": status, "waitingFor": why})
+status_a("waiting", "input needed"); SENT.clear()
+hook("PreToolUse", "A", X, tool_name="Bash", agent_id="sub1")
+hook("PostToolUse", "A", X, tool_name="Bash", agent_id="sub1")
+hook("Stop", "A", X)
+status_a("waiting", "dialog open")        # nguoi dung tu mo /model: khong phai Claude dang cho
+hook("PreToolUse", "A", X, tool_name="Bash", agent_id="sub1")
+status_a("busy")                          # da tra loi: hook ke tiep ve cam
+hook("PostToolUse", "A", X, tool_name="AskUserQuestion")
+check("dang hoi nguoi dung: hook cua subagent va Stop khong doi den do thanh cam/xanh",
+      SENT == ["0:wait", "0:wait", "0:wait", "0:busy", "0:busy"], "sent=%s" % SENT)
+
 # Esc/Ctrl+C luc tool dang chay: Stop khong chay, chi co PostToolUseFailure kem is_interrupt
 fresh()
 hook("SessionStart", "A", X); SENT.clear()
@@ -222,7 +241,7 @@ hook("PreToolUse", "C", "/C")
 B.wsl_attach = lambda *a: False
 check("cam lai board: gui lai mau tung den, session da chet tra den cho session moi",
       "D" not in m() and led("A") == 2 and sent_start == ["bri:5\nfx:scan\n0:ready\n1:wait\n2:off\n3:ready\n2:ready"]
-      and SENT == ["bri:5\nfx:scan\n0:ready\n2:ready\n3:ready\n1:busy"],
+      and SENT == ["bri:5\nfx:scan\n0:ready\n2:ready\n3:ready\n1:wait"],  # C dang xin quyen: giu do
       "map=%s, mo session gui %s, gan lai gui %s" % (m(), sent_start, SENT))
 
 # Tat het terminal (khong co SessionEnd) roi `claude -c`: lay den trong nho nhat tu den 1, khong giu den cu
