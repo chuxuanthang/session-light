@@ -12,7 +12,9 @@ Plugin Claude Code điều khiển đèn USB báo trạng thái từng session. 
 ## Cách hoạt động
 Hook của Claude Code gọi `code/scripts/light.py` mỗi khi có sự kiện (gửi prompt, chạy tool, xin quyền, trả lời xong, thoát). Script gửi một dòng `<đèn>:<trạng thái>` qua cổng serial xuống board RP2040 chạy CircuitPython.
 
-Session mới mở sẽ tự lấy đèn còn trống đầu tiên. Đèn đang có session khác giữ thì session mới không có đèn, không giành đèn của session đang chạy. Muốn chuyển đèn thì gõ `/session-light:usb-connect`.
+Đèn đánh số 1–8 từ trái sang phải. Session mới mở, kể cả mở lại bằng `claude -c`, sẽ tự lấy đèn còn trống đầu tiên tính từ bên trái, không giữ đèn cũ. Đèn đang có session khác giữ thì session mới không có đèn, không giành đèn của session đang chạy. Muốn chuyển đèn thì gõ `/session-light:usb-connect`.
+
+Rút USB cắm lại thì board quên hết màu. Lúc mở session, plugin bật một tiến trình nền nhỏ (mỗi lúc chỉ một, tự thoát khi không còn session nào) kiểm tra board mỗi giây: board cắm lại thì vài giây sau nó tự gắn lại (trên WSL) và gửi lại màu của mọi đèn theo trạng thái thật của từng session, nên đèn đang có session không bị tối như đèn trống. Session đã tắt ngang (đóng terminal) thì được bỏ gán, trả đèn.
 
 ## Cần có
 - Board RP2040 chạy CircuitPython (đang dùng RP2040-Zero, CircuitPython 10.3.1) và thanh 8 LED WS2812 (đang dùng CJMCU-2812-8), chân dữ liệu nối vào GP29. Chỉ có LED onboard (GP16) thì vẫn chạy được với 1 đèn, xem [`code/README.md`](code/README.md).
@@ -33,9 +35,10 @@ WSL2, Windows chạy thẳng, đổi chân LED hay số đèn: xem [`code/README
 ## Lệnh
 | Lệnh | Việc |
 |---|---|
-| `/session-light:usb-connect [n]` | Gán session hiện tại vào đèn `n` (0–7, mặc định 0), đẩy session đang giữ đèn đó ra |
+| `/session-light:usb-connect [n]` | Gán session hiện tại vào đèn `n` (1–8, mặc định 1, đèn 1 bên trái ngoài cùng), đẩy session đang giữ đèn đó ra |
 | `/session-light:usb-disconnect` | Bỏ gán và tắt đèn; thư mục này không tự gán lại đến khi `usb-connect` |
 | `/session-light:usb-status` | In từng đèn đang gán cho session nào, theo tên session trên tab terminal |
+| `/session-light:usb-blink` | Nháy xanh lá 3 lần đèn của session hiện tại rồi trả về màu cũ, kèm in số đèn, để biết terminal này đang dùng đèn nào |
 | `/session-light:usb-brightness [0–100]` | Đổi độ sáng các đèn có session theo phần trăm (mặc định 5), bỏ trống để xem độ sáng hiện tại. Đèn chạy hiệu ứng luôn giữ 5% |
 | `/session-light:usb-fx [số hoặc tên]` | Đổi hiệu ứng của đèn chưa gắn session: `0` `none` (tắt), `1` `scan` (sóng quét, mặc định), `2` `rainbow` (cầu vồng), `3` `breathe` (thở màu), `4` `chase` (đèn Noel chạy), `5` `comet` (sao băng), `6` `wave` (sóng màu lạnh), `7` `heart` (nhịp tim) |
 

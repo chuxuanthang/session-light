@@ -1,6 +1,6 @@
 """claude-light: gan session Claude Code voi den (map, pending, muted) va doc ten session."""
 import os, json, glob
-import light_store as store
+import light_store as store, light_watch as watch
 
 def led_for(session_id, cwd):
     c = store.cfg()
@@ -28,6 +28,19 @@ def led_for(session_id, cwd):
     m[session_id] = {"led": led, "cwd": cwd}
     store.save(store.MAP, m)
     return led
+
+def release(session_id):
+    # claude -c / --resume: lay den trong nho nhat (1 -> 8) nhu session moi, khong giu den cu ke ca den gan tay.
+    # auto_assign tat thi giu (khong tu gan lai duoc); tien trinh khac cua session nay con song (`claude -c` o
+    # terminal thu hai) thi giu: no dang dung den do
+    m = store.load(store.MAP, {})
+    if session_id not in m or not store.cfg().get("auto_assign"):
+        return
+    mine = watch.own_pids()
+    if any(ok and r.get("pid") not in mine for ok, at, p, r in watch.status_records().get(session_id, [])):
+        return
+    del m[session_id]
+    store.save(store.MAP, m)
 
 def end_session(session_id, cwd, reason):
     mu = store.load(store.MUTED, [])

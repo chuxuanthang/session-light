@@ -10,6 +10,8 @@ MUTED = os.path.join(DIR, "muted.json")      # [cwd hoac session_id] da disconne
 LOG = os.path.join(DIR, "log.txt")
 LOCK = os.path.join(DIR, "lock")
 WATCH = os.path.join(DIR, "watch.json")      # {session_id: token cua tien trinh theo doi luot hien tai}
+KEEPER = os.path.join(DIR, "keeper.lock")   # tien trinh `light.py keep` giu flock suot doi: moi luc chi mot
+ATTACH = os.path.join(DIR, "attach.json")    # {"lost": hook da thay mat cong, "tried": luc goi usbipd attach}
 
 def claude_dir():
     return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(HOME, ".claude")

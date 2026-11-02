@@ -4,14 +4,16 @@ claude-light: gui trang thai session Claude Code xuong den USB.
 
 Cach dung:
   light.py hook              (duoc Claude Code goi, doc JSON tu stdin)
-  light.py connect <n>       gan session o thu muc hien tai vao den n
+  light.py connect <n>       gan session o thu muc hien tai vao den n (1-8, den 1 ben trai, bo trong = 1)
   light.py disconnect        bo gan cho thu muc hien tai, tat den
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
   light.py brightness [0-100]  doi do sang den co session (phan tram), bo trong de xem
+  light.py blink             nhay xanh la 3 lan den cua session o thu muc hien tai
   light.py fx [so|ten]       doi hieu ung den trong: 0 none | 1 scan | 2 rainbow | 3 breathe | 4 chase | 5 comet | 6 wave | 7 heart
-  light.py send <n>:<state>  gui lenh tho (debug)
+  light.py send <n>:<state>  gui lenh tho (debug), n dem tu 0
   light.py watch ...         (noi bo) theo doi trang thai session trong luot
+  light.py keep              (noi bo) tien trinh nen tu gan lai board, gui lai mau khi board cam lai
 
 File cau hinh: ~/.claude-light/config.json
   {"port": null, "num_leds": 8, "auto_assign": true, "debug": false, "brightness": 5, "idle_fx": "scan"}
@@ -19,11 +21,13 @@ File cau hinh: ~/.claude-light/config.json
 Module cung thu muc: light_store (file, cau hinh, log), light_serial (cong serial, usbipd),
 light_sessions (gan session voi den), light_watch (theo doi trang thai ngoai hook),
 light_display (do sang, hieu ung den trong).
+
+Nguoi dung dem den tu 1 (connect, status, disconnect); map.json va lenh xuong board dem tu 0.
 """
 import sys, os, json, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # nap duoc ca khi import tu noi khac (test)
 import light_store as store, light_serial as board, light_sessions as sessions, light_watch as watch
-import light_display as display
+import light_display as display, light_reconnect as reconnect
 
 EVENT_STATE = {
     "SessionStart": "ready",
@@ -61,19 +65,23 @@ def cmd_hook():
     store.log("event=%s sid=%s cwd=%s" % (event, sid[:8], cwd))
     if not state or not sid:
         return
-    if event == "SessionStart":
-        board.wsl_attach()
+    # board quen het mau moi lan cam lai: gui lai ca thanh luc mo session (ke ca session khong co den) va khi
+    # hook vua tu gan lai board vao WSL (toi da 1 lan moi 30 s, board rut han thi khong ton moi hook)
+    resync = board.wsl_attach(0 if event == "SessionStart" else 30) or event == "SessionStart"
     with store.locked():
+        if event == "SessionStart" and data.get("source") == "resume":
+            sessions.release(sid)
+        lines = display.sync_lines(sid) if resync else []  # truoc khi gan: den cua session da chet duoc tra
         if event == "SessionEnd":
             led = sessions.end_session(sid, cwd, data.get("reason"))
         else:
             led = sessions.led_for(sid, cwd)
-    # board quen do sang / hieu ung moi lan cam lai: gui lai luc mo session, ke ca session khong co den
-    lines = [display.settings_line()] if event == "SessionStart" else []
     if led is not None:
         lines.append("%d:%s" % (led, state))
     if lines:
         board.send("\n".join(lines))
+    if event == "SessionStart":
+        reconnect.spawn()
     if led is not None:
         if event == "UserPromptSubmit":
             watch.watch_turn(sid, started)
@@ -83,35 +91,34 @@ def cmd_connect(n):
         n = int(n)
     except (TypeError, ValueError):
         print("Cách dùng: /session-light:usb-connect <số đèn>"); return
-    c = store.cfg()
-    if not 0 <= n < int(c["num_leds"]):
-        print("Số đèn phải từ 0 đến %d" % (int(c["num_leds"]) - 1)); return
-    board.wsl_attach()
+    total = int(store.cfg()["num_leds"])
+    if not 1 <= n <= total:
+        print("Số đèn phải từ 1 đến %d" % total); return
+    led = n - 1
     cwd = os.getcwd()
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    lines = display.attach_lines(sid)
     with store.locked():
         mu = [x for x in store.load(store.MUTED, []) if x not in (cwd, sid)]
         store.save(store.MUTED, mu)
         m = store.load(store.MAP, {})
         mine = sessions.my_sessions(m, cwd)
-        old = {m[k]["led"] for k in mine if k in m} - {n}
-        for k in [k for k, v in m.items() if v["led"] == n and k not in mine]:
-            del m[k]  # last-wins: day session khac dang giu den n
+        old = {m[k]["led"] for k in mine if k in m} - {led}
+        for k in [k for k, v in m.items() if v["led"] == led and k not in mine]:
+            del m[k]  # last-wins: day session khac dang giu den nay
         if sid:
-            m[sid] = {"led": n, "cwd": cwd}
+            m[sid] = {"led": led, "cwd": cwd}
         for k in mine:
             if k in m:
-                m[k]["led"] = n
+                m[k]["led"] = led
         pend = store.load(store.PENDING, {})
         assigned = any(k in m for k in mine)
         if assigned:
             pend.pop(cwd, None)
         else:  # khong biet session_id va chua co session nao o cwd: hook ke tiep se chot
-            pend[cwd] = n
+            pend[cwd] = led
         store.save(store.MAP, m); store.save(store.PENDING, pend)
-    for x in old:
-        board.send("%d:off" % x)
-    board.send("%d:ready" % n)
+    board.send("\n".join(lines + ["%d:off" % x for x in old] + ["%d:ready" % led]))
     if assigned:
         print("Đã gán đèn %d cho session ở %s" % (n, cwd))
     else:
@@ -131,7 +138,7 @@ def cmd_disconnect():
     for n in leds:
         board.send("%d:off" % n)
     if leds:
-        print("Đã bỏ gán đèn %s cho session ở %s" % (", ".join(map(str, sorted(leds))), cwd))
+        print("Đã bỏ gán đèn %s cho session ở %s" % (", ".join(str(x + 1) for x in sorted(leds)), cwd))
     else:
         print("Session ở %s chưa gán đèn nào, đã tắt tự gán cho thư mục này" % cwd)
 
@@ -141,9 +148,9 @@ def cmd_status():
     for n in range(int(c["num_leds"])):
         owner = [(sid, v["cwd"]) for sid, v in m.items() if v["led"] == n]
         if not owner:
-            print("  đèn %d: (trống)" % n); continue
+            print("  đèn %d: (trống)" % (n + 1)); continue
         title = sessions.session_title(owner[0][0])
-        print("  đèn %d: %s" % (n, "%s (%s)" % (title, owner[0][1]) if title else owner[0][1]))
+        print("  đèn %d: %s" % (n + 1, "%s (%s)" % (title, owner[0][1]) if title else owner[0][1]))
 
 def cmd_test():
     board.wsl_attach()
@@ -164,7 +171,7 @@ if __name__ == "__main__":
         if not args or args[0] == "hook":
             cmd_hook()
         elif args[0] == "connect":
-            cmd_connect(args[1] if len(args) > 1 else 0)  # khong go so -> den 0
+            cmd_connect(args[1] if len(args) > 1 else 1)  # khong go so -> den 1
         elif args[0] == "disconnect":
             cmd_disconnect()
         elif args[0] == "status":
@@ -175,6 +182,10 @@ if __name__ == "__main__":
             display.cmd_brightness(args[1] if len(args) > 1 else None)
         elif args[0] == "fx":
             display.cmd_fx(args[1] if len(args) > 1 else None)
+        elif args[0] == "blink":
+            display.cmd_blink()
+        elif args[0] == "keep":
+            reconnect.cmd_keep()
         elif args[0] == "watch" and len(args) > 3:
             watch.cmd_watch(*args[1:4])
         elif args[0] == "send" and len(args) > 1:

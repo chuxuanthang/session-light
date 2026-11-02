@@ -1,9 +1,11 @@
 # CircuitPython firmware cho RP2040-Zero: den trang thai Claude Code
 # Nhan lenh qua cong serial USB, moi dong dang "<den>:<trang thai>"
 #   vi du: 0:busy   0:wait   0:ready   0:off   all:off   0:#ff00ff   ping
+# Den danh so tu 0, den 0 ben trai ngoai cung (lenh slash tren host dem tu 1: den 1 la 0:)
 # Den "off" (chua gan session) chay hieu ung trang tri:
 #   fx:none   fx:scan   fx:rainbow   fx:breathe   fx:chase   fx:comet   fx:wave   fx:heart
 # Do sang cac den co session, theo phan tram: bri:5   bri:30 (den chay hieu ung giu FX_BRIGHTNESS)
+# Nhay xanh la 3 lan de tim den cua mot session: flash:0 (de len mau dang hien, xong tu tra ve)
 import time, sys, math, board, neopixel, supervisor
 
 # ---- CAU HINH: chan va so bong LED ----
@@ -12,6 +14,7 @@ NUM_LEDS = 8          # LED onboard: 1
 BRIGHTNESS = 0.05     # den co session, 0..1 luc bat board, host gui bri: de doi; thap hon 0.05 thi mau bi lech
 FX_BRIGHTNESS = 0.05  # den chay hieu ung, co dinh
 IDLE_FX = "scan"      # hieu ung luc bat board, host gui fx: de doi
+FLIP = True           # thanh cam vao may thi dau IN (bong dau day) nam ben phai: dao lai de den 0 o ben trai
 # ---------------------------------------------------------
 
 COLORS = {
@@ -30,8 +33,10 @@ px = neopixel.NeoPixel(PIN, NUM_LEDS, brightness=1.0, auto_write=False)
 bri = BRIGHTNESS
 states = ["off"] * NUM_LEDS
 since = [0.0] * NUM_LEDS  # luc moi den nhan trang thai: den vua chuyen sang wait sang ngay
+flash = [None] * NUM_LEDS  # luc den nhan lenh flash:, None la khong nhay
 fx = IDLE_FX
 buf = ""
+POS = [NUM_LEDS - 1 - i if FLIP else i for i in range(NUM_LEDS)]  # den i -> bong thu POS[i] tren day
 
 def color_of(state):
     if state.startswith("#") and len(state) == 7:
@@ -53,7 +58,7 @@ def wheel(h):
             (0, down, 255), (up, 0, 255), (255, 0, down))[i]
 
 # Moi hieu ung nhan t (giay) va idle (chi so cac den "off"), tra mau cho tung den trong idle.
-# Chu ky deu chia het 3600 s de khop voi clock().
+# Chu ky deu chia het 3600 s de khop voi clock(). Hieu ung co huong deu chay tu den 0 sang den 7.
 def scan(t, idle):
     # mot cham chay qua lai tren day den trong, di ve het 3 s, lo ra ngoai hai dau mot chut
     n = len(idle)
@@ -61,8 +66,8 @@ def scan(t, idle):
     return [dim(CYAN, max(0, 1 - abs(j - x) / 1.5)) for j in range(n)]
 
 def rainbow(t, idle):
-    # cau vong xoay mot vong het 3 s, cac den lech mau theo vi tri tren thanh
-    return [wheel(t / 3 + i / NUM_LEDS) for i in idle]
+    # cau vong xoay mot vong het 3 s, cac den lech mau theo vi tri tren thanh, troi cung chieu hieu ung khac
+    return [wheel(t / 3 - i / NUM_LEDS) for i in idle]
 
 def breathe(t, idle):
     # sang len toi di moi 4 s, mau troi dan giua xanh duong va tim moi 12 s
@@ -112,9 +117,17 @@ def render(t):
         c = color_of(s)
         if s in BLINK and int((t - since[i]) * 2) % 2:  # nhap nhay: sang 0.5 s, toi 0.5 s
             c = dim(c, 0.1)
-        px[i] = dim(c, bri)
+        px[POS[i]] = dim(c, bri)
     for i, c in zip(idle, FX[fx](t, idle)):
-        px[i] = dim(c, FX_BRIGHTNESS)
+        px[POS[i]] = dim(c, FX_BRIGHTNESS)
+    for i, at in enumerate(flash):
+        if at is None:
+            continue
+        k = int((t - at) % 3600 / 0.3)  # 6 nhip 0.3 s: toi, sang, toi, sang, toi, sang
+        if k >= 6:
+            flash[i] = None  # het nhay: den hien lai trang thai hien tai, ke ca khi da doi trong luc nhay
+        else:  # khong duoi FX_BRIGHTNESS de bri:0 van thay den nhay
+            px[POS[i]] = dim(COLORS["ready"], max(bri, FX_BRIGHTNESS)) if k % 2 else (0, 0, 0)
     px.show()
 
 def handle(line):
@@ -136,6 +149,13 @@ def handle(line):
             bri = min(100, max(0, int(state))) / 100
         except ValueError:
             print("err"); return
+    elif idx == "flash":
+        try:
+            n = int(state)
+        except ValueError:
+            print("err"); return
+        if 0 <= n < NUM_LEDS:
+            flash[n] = clock()
     else:
         if idx == "all":
             targets = range(NUM_LEDS)

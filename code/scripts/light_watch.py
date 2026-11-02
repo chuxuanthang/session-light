@@ -25,11 +25,37 @@ def alive(pid):
         pass  # con song nhung khong co quyen gui tin hieu
     return True
 
+def status_records():
+    # moi lan `claude -c` la mot tien trinh moi cung sessionId: {sessionId: [(con song, updatedAt, duong dan, noi dung)]}
+    out = {}
+    for p in glob.glob(os.path.join(store.claude_dir(), "sessions", "*.json")):
+        r = store.load(p, {})
+        if isinstance(r, dict) and r.get("sessionId"):
+            out.setdefault(r["sessionId"], []).append((alive(r.get("pid")), r.get("updatedAt", 0), p, r))
+    return out
+
 def status_file(sid):
-    # moi lan `claude -c` la mot tien trinh moi cung sessionId: chi lay file cua tien trinh con song
-    recs = ((p, store.load(p, {})) for p in glob.glob(os.path.join(store.claude_dir(), "sessions", "*.json")))
-    found = [(r.get("updatedAt", 0), p) for p, r in recs if r.get("sessionId") == sid and alive(r.get("pid"))]
-    return max(found)[1] if found else None
+    # chi lay file cua tien trinh con song, moi nhat
+    live = [(at, p) for ok, at, p, r in status_records().get(sid, []) if ok]
+    return max(live)[1] if live else None
+
+def own_pids():
+    # tien trinh claude dang chay hook nay nam trong chuoi cha; may khong co /proc thi chi lay cha truc tiep
+    pids, pid = set(), os.getppid()
+    while pid > 1 and pid not in pids:
+        pids.add(pid)
+        try:
+            with open("/proc/%d/stat" % pid) as f:
+                pid = int(f.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return pids
+
+def state_of(rec):
+    # trang thai den theo file trang thai phien; None la khong doi (vd nguoi dung tu mo /model)
+    status = rec.get("status")
+    return ("ready" if status in IDLE else "busy" if status == "busy" else
+            "wait" if status == "waiting" and rec.get("waitingFor") not in NOT_WAIT else None)
 
 def watch_turn(sid, since_ms):
     token = "%d.%d" % (os.getpid(), since_ms)
@@ -58,8 +84,7 @@ def cmd_watch(sid, token, since_ms):
         if at <= since or at == seen:
             continue  # chua doi tu luc gui prompt (hook UserPromptSubmit da bat cam)
         seen = at
-        state = ("ready" if status in IDLE else "busy" if status == "busy" else
-                 "wait" if status == "waiting" and rec.get("waitingFor") not in NOT_WAIT else None)
+        state = state_of(rec)
         led = store.load(store.MAP, {}).get(sid, {}).get("led")
         store.log("status=%s/%s sid=%s" % (status, rec.get("waitingFor"), sid[:8]))
         if state and led is not None:
