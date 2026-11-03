@@ -81,6 +81,26 @@ def swap(a, b):
     renumber({a: b, b: a})
     return held
 
+def unassign(leds=None):
+    # /usb-disconnect <so>: bo gan den trong leds (None la tat ca), ke ca den pending. Session bi bo gan vao muted de
+    # hook khong tu gan lai (den usb-connect hoac SessionEnd). Goi trong store.locked(). Tra {den: [(sid, cwd)]}
+    m, pend, mu = store.load(store.MAP, {}), store.load(store.PENDING, {}), store.load(store.MUTED, [])
+    out = {}
+    for k in [k for k, v in m.items() if leds is None or v["led"] in leds]:
+        v = m.pop(k)
+        out.setdefault(v["led"], []).append((k, v["cwd"]))
+        if k not in mu:
+            mu.append(k)
+    for c in [c for c, n in pend.items() if leds is None or n in leds]:
+        out.setdefault(pend.pop(c), [])
+    store.save(store.MAP, m); store.save(store.PENDING, pend); store.save(store.MUTED, mu)
+    return out
+
+def label(sid, cwd):
+    # ten session kem thu muc nhu /usb-status; chua co ten thi chi thu muc
+    title = session_title(sid)
+    return "%s (%s)" % (title, cwd) if title else cwd
+
 def session_title(sid):
     # ten tren tab terminal: Claude Code ghi vao transcript; ten dat bang /rename uu tien hon ten tu dat
     found = {}

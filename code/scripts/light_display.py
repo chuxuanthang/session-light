@@ -1,5 +1,6 @@
 """claude-light: do sang cac den co session, hieu ung cua cac den chua gan session, nhay den de tim,
-gui lai ca thanh den khi board vua cam lai, sap lai den (/usb-sort, /usb-swap), chay thu mau."""
+gui lai ca thanh den khi board vua cam lai, sap lai den (/usb-sort, /usb-swap), bo gan den bat ky
+(/usb-disconnect <so>), chay thu mau."""
 import os, re, time
 import light_store as store, light_serial as board, light_sessions as sessions, light_watch as watch
 
@@ -111,6 +112,26 @@ def cmd_swap(text=""):
     a, b = nums
     held, tail = rearrange(lambda: sessions.swap(a - 1, b - 1))
     print(("Đã đổi đèn %d ↔ %d" if held else "Đèn %d và %d đều chưa gán, không có gì để đổi") % (a, b) + tail)
+
+def cmd_disconnect_led(text):
+    # bo gan den so n cua bat ky session nao (khong can o dung session do), 0 la bo gan het
+    total = int(store.cfg()["num_leds"])
+    n = int(text) if str(text).strip().isdecimal() else -1
+    if not 0 <= n <= total:
+        print("Cách dùng: /session-light:usb-disconnect [số đèn 1–%d, 0 là bỏ gán hết, "
+              "bỏ trống là đèn của session này]" % total); return
+    pre = attach_lines()  # vua gan board vao WSL thi gui lai ca thanh truoc
+    with store.locked():
+        freed = sessions.unassign(None if n == 0 else {n - 1})
+    if not freed:
+        print("Chưa có đèn nào được gán" if n == 0 else "Đèn %d chưa gán session nào" % n); return
+    ok = board.send("\n".join(pre + ["%d:off" % x for x in sorted(freed)]))
+    if n == 0:
+        msg = "Đã bỏ gán hết: đèn " + ", ".join(str(x + 1) for x in sorted(freed))
+    else:
+        owners = "; ".join(sessions.label(*o) for o in freed[n - 1])
+        msg = "Đã bỏ gán đèn %d" % n + (": " + owners if owners else "")
+    print(msg + ("" if ok else NOT_SENT))
 
 def cmd_test():
     # chay thu tung mau tren ca thanh

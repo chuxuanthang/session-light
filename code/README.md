@@ -38,7 +38,8 @@ Lúc phát triển, thử nhanh mà không cài: `claude --plugin-dir /duong/dan
 ## 4. Dùng
 - Mặc định `auto_assign: true`: session mới tự lấy đèn trống đầu tiên, không cần làm gì. Hết đèn trống thì session mới không có đèn, không giành đèn của session đang chạy.
 - `/session-light:usb-connect 2` gán session ở thư mục hiện tại vào đèn 2 (đẩy session cũ ra nếu đèn đang bận). Số đèn từ 1 đến 8 với thanh 8 bóng, đèn 1 bên trái ngoài cùng; bỏ trống thì gán vào đèn 1.
-- `/session-light:usb-disconnect` gỡ đèn và tắt. Thư mục đó sẽ không được tự gán lại đến khi bạn `usb-connect` lần nữa.
+- `/session-light:usb-disconnect` gỡ đèn của session hiện tại và tắt. Thư mục đó sẽ không được tự gán lại đến khi bạn `usb-connect` lần nữa.
+- `/session-light:usb-disconnect 3` gỡ đèn 3 dù đang thuộc session nào, gõ từ terminal nào cũng được; `/session-light:usb-disconnect 0` gỡ hết. Session bị gỡ không tự lấy đèn khác đến khi gõ `usb-connect` trong chính session đó; thư mục của nó thì không bị chặn, session mới mở ở đó vẫn tự lấy đèn.
 - `/session-light:usb-status` xem đèn nào gán cho session nào: in tên session (đúng tên trên tab terminal, tên đặt bằng `/rename` được ưu tiên) kèm thư mục. Session chưa có tên thì chỉ in thư mục.
 - `/session-light:usb-blink` nháy xanh lá 3 lần đèn đang gắn session hiện tại rồi trả về màu trạng thái, đồng thời in số đèn. Dùng khi không nhớ terminal nào đang dùng đèn nào. Cần firmware từ bản 0.2.20.
 - `/session-light:usb-sort` dồn các đèn đang gán về liền nhau từ đèn 1, giữ nguyên thứ tự (đang sáng 1 3 5 6 8 thì thành 1 2 3 4 5), rồi in đèn nào chuyển sang đèn nào. Session đã tắt ngang (không có `SessionEnd`) được bỏ gán trước, nên không chiếm chỗ.

@@ -154,6 +154,34 @@ fresh()
 out = cmd(L.cmd_disconnect, X, "A")
 check("disconnect khi chua gan den", "chưa gán đèn nào" in out, "in %r" % out)
 
+# /usb-disconnect <so>: bo gan den bat ky tu session nao cung duoc; session bi bo gan khong tu lay den khac
+fresh(num_leds=4)
+hook("SessionStart", "A", X); hook("SessionStart", "B", "/y"); hook("SessionStart", "C", "/z")
+cmd(L.cmd_connect, "/w", None, 4)          # den 4 cho trong pending (chua co session o /w)
+SENT.clear()
+out = cmd(L.cmd_disconnect, X, "A", "2")   # tu session A bo gan den cua B
+hook("PostToolUse", "B", "/y")             # B khong duoc tu gan lai
+check("usb-disconnect 2 tu session khac: bo gan B, B khong tu gan lai",
+      out == "Đã bỏ gán đèn 2: /y" and SENT == ["1:off"] and "B" not in m() and led("A") == 0 and led("C") == 2,
+      "in %r, map=%s, sent=%s" % (out, m(), SENT))
+SENT.clear()
+outs = [cmd(L.cmd_disconnect, X, "A", "4"), cmd(L.cmd_disconnect, X, "A", "2")]
+check("usb-disconnect den pending va den trong", outs == ["Đã bỏ gán đèn 4", "Đèn 2 chưa gán session nào"]
+      and not p() and SENT == ["3:off"], "in %r, pending=%s, sent=%s" % (outs, p(), SENT))
+SENT.clear()
+outs = [cmd(L.cmd_disconnect, X, "A", v) for v in ("5", "-1", "abc")]
+check("usb-disconnect so sai in cach dung, khong doi gi",
+      all(o.startswith("Cách dùng") for o in outs) and SENT == [] and led("A") == 0 and led("C") == 2,
+      "in %r, map=%s, sent=%s" % (outs, m(), SENT))
+cmd(L.cmd_connect, "/w", None, 4); SENT.clear()
+out = cmd(L.cmd_disconnect, X, "A", "0")
+hook("PostToolUse", "A", X); hook("PostToolUse", "C", "/z"); hook("SessionStart", "D", "/d")
+check("usb-disconnect 0 bo gan het, session cu khong tu gan lai, session moi van tu gan",
+      out == "Đã bỏ gán hết: đèn 1, 3, 4" and SENT[0] == "0:off\n2:off\n3:off" and not p()
+      and set(m()) == {"D"} and led("D") == 0, "in %r, map=%s, pending=%s, sent=%s" % (out, m(), p(), SENT))
+fresh(); out = cmd(L.cmd_disconnect, X, "A", "0")
+check("usb-disconnect 0 khi chua gan den", out == "Chưa có đèn nào được gán", "in %r" % out)
+
 fresh()
 hook("SessionStart", "A", X); SENT.clear()
 hook("Notification", "A", X, notification_type="idle_prompt")

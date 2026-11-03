@@ -5,7 +5,7 @@ claude-light: gui trang thai session Claude Code xuong den USB.
 Cach dung:
   light.py hook              (duoc Claude Code goi, doc JSON tu stdin)
   light.py connect <n>       gan session o thu muc hien tai vao den n (1-8, den 1 ben trai, bo trong = 1)
-  light.py disconnect        bo gan cho thu muc hien tai, tat den
+  light.py disconnect [n]    bo gan den n (1-8, 0 la tat ca), bo trong la den cua thu muc hien tai; tat den
   light.py status            in bang den -> session
   light.py test              chay thu cac mau
   light.py brightness [0-100]  doi do sang den co session (phan tram), bo trong de xem
@@ -135,7 +135,9 @@ def cmd_connect(n):
     else:
         print("Đèn %d sẽ được gán cho session ở %s" % (n, cwd))
 
-def cmd_disconnect():
+def cmd_disconnect(n=None):
+    if n is not None:  # /usb-disconnect <so>: den bat ky, 0 la tat ca
+        return display.cmd_disconnect_led(n)
     cwd = os.getcwd()
     sid = os.environ.get("CLAUDE_CODE_SESSION_ID")
     with store.locked():
@@ -160,8 +162,7 @@ def cmd_status():
         owner = [(sid, v["cwd"]) for sid, v in m.items() if v["led"] == n]
         if not owner:
             print("  đèn %d: (trống)" % (n + 1)); continue
-        title = sessions.session_title(owner[0][0])
-        print("  đèn %d: %s" % (n + 1, "%s (%s)" % (title, owner[0][1]) if title else owner[0][1]))
+        print("  đèn %d: %s" % (n + 1, sessions.label(*owner[0])))
 
 if __name__ == "__main__":
     try:  # in tieng Viet co dau: Windows mac dinh cp1252 se loi
@@ -175,7 +176,7 @@ if __name__ == "__main__":
         elif args[0] == "connect":
             cmd_connect(args[1] if len(args) > 1 else 1)  # khong go so -> den 1
         elif args[0] == "disconnect":
-            cmd_disconnect()
+            cmd_disconnect(*args[1:2])
         elif args[0] == "status":
             cmd_status()
         elif args[0] in ("brightness", "fx"):  # display.cmd_brightness / cmd_fx
