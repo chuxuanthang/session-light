@@ -25,14 +25,41 @@ def alive(pid):
         pass  # con song nhung khong co quyen gui tin hieu
     return True
 
+def proc_start(pid):
+    # starttime (truong 22 cua /proc/<pid>/stat, tinh tu luc boot), Claude Code ghi vao procStart. Khong co /proc: None
+    try:
+        with open("/proc/%d/stat" % pid) as f:
+            return f.read().rsplit(")", 1)[1].split()[19]
+    except (OSError, ValueError, IndexError, TypeError):
+        return None
+
+def running(rec):
+    # tien trinh ghi file con song va dung la no: tat WSL ngang (may treo) thi file cu khong ai xoa, pid dem lai tu
+    # dau nen trung tien trinh moi; khi do starttime khac procStart
+    pid = rec.get("pid")
+    if not alive(pid):
+        return False
+    start = proc_start(pid) if rec.get("procStart") else None
+    return start is None or start == str(rec["procStart"])
+
+def standby(rec):
+    # tien trinh con chay nhung khong phai session dang dung: cua so da dua session ra chay nen (parkedJobId, phim <-:
+    # cua so chi con xem danh sach agent, hoi thoai chay tiep o job nen, session khac) hoac session nen du phong daemon
+    # bat san cho job sau (spare, Claude Code xoa co khi job bat dau chay)
+    return bool(rec.get("parkedJobId") or rec.get("spare"))
+
 def status_records():
-    # moi lan `claude -c` la mot tien trinh moi cung sessionId: {sessionId: [(con song, updatedAt, duong dan, noi dung)]}
+    # moi lan `claude -c` la mot tien trinh moi cung sessionId: {sessionId: [(session that, updatedAt, duong dan, noi dung)]}
     out = {}
     for p in glob.glob(os.path.join(store.claude_dir(), "sessions", "*.json")):
         r = store.load(p, {})
         if isinstance(r, dict) and r.get("sessionId"):
-            out.setdefault(r["sessionId"], []).append((alive(r.get("pid")), r.get("updatedAt", 0), p, r))
+            out.setdefault(r["sessionId"], []).append((running(r) and not standby(r), r.get("updatedAt", 0), p, r))
     return out
+
+def on_standby(sid):
+    # hook khong gan den cho session dang cho (du phong, hoac cua so da dua ra chay nen)
+    return any(standby(r) and running(r) for ok, at, p, r in status_records().get(sid, []))
 
 def status_file(sid):
     # chi lay file cua tien trinh con song, moi nhat
@@ -81,7 +108,7 @@ def cmd_watch(sid, token, since_ms):
         if store.load(store.WATCH, {}).get(sid) != token or sid not in store.load(store.MAP, {}):
             return  # co luot moi, hoac session da ket thuc / bo gan den
         rec = store.load(path, {}) if path else {}
-        if rec.get("sessionId") != sid or not alive(rec.get("pid")):
+        if rec.get("sessionId") != sid or not running(rec) or standby(rec):
             path = status_file(sid)
             if not path:
                 return  # khong co file trang thai (Claude Code khong ghi, hoac claude da tat)

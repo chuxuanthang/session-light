@@ -10,6 +10,8 @@ def led_for(session_id, cwd):
             m[session_id]["cwd"] = cwd
             store.save(store.MAP, m)
         return m[session_id]["led"]
+    if watch.on_standby(session_id):  # session nen du phong / cua so da dua ra chay nen: chua phai session dang dung
+        return None
     used = {v["led"] for v in m.values()}
     pend = store.load(store.PENDING, {})
     led = pend.pop(cwd, None)

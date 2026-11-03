@@ -335,6 +335,38 @@ check("claude -c lay den trong nho nhat, khong giu den cu; tien trinh cu con cha
       resumed == (0, False, ["bri:5\nfx:scan\n0:off\n1:off\n2:off\n0:ready"]) and led("A") == 1,
       "lan dau %s, terminal thu hai: map=%s" % (resumed, m()))
 
+def rec(f, sid, **kw):
+    S.save(os.path.join(S.DIR, "sessions", f + ".json"), dict({"sessionId": sid, "pid": os.getpid(), "status": "busy"}, **kw))
+
+# Dua session ra chay nen (phim <- trong Claude Code): cua so cu ghi parkedJobId roi bat job nen (session moi, fork
+# hoi thoai) va mot session nen du phong (spare) cho job sau. Ca ba tien trinh deu song. Job nhan lai den cua session
+# goc, session du phong khong lay den; den luc duoc dung that (Claude Code xoa co spare) thi lay den nhu thuong
+fresh(num_leds=4)
+os.makedirs(os.path.join(S.DIR, "sessions"))
+rec("1", "A"); hook("SessionStart", "A", X)          # A -> den 1
+hook("SessionStart", "B", "/y")                      # B -> den 2 (khong co file trang thai: coi nhu song)
+rec("1", "A", parkedJobId="J0000000")
+rec("2", "J0000000-job", kind="bg", jobId="J0000000")
+rec("3", "SP", kind="bg", jobId="SP", spare=True, status="idle")
+hook("SessionStart", "J0000000-job", X); hook("SessionStart", "SP", X)
+parked = {k: v["led"] for k, v in m().items()}
+rec("3", "SP", kind="bg", jobId="SP")                # job nen moi dung session du phong
+hook("PreToolUse", "SP", X)
+check("dua session ra chay nen: job nhan den cua session goc, session du phong khong lay den den khi duoc dung",
+      parked == {"B": 1, "J0000000-job": 0} and led("SP") == 2, "truoc khi dung spare %s, sau: map=%s" % (parked, m()))
+
+# Tat WSL ngang (may treo): file trang thai cu khong ai xoa, pid dem lai tu dau nen trung tien trinh moi. procStart
+# khac starttime cua tien trinh dang giu pid do la file cu, session coi nhu da chet
+if os.path.exists("/proc/self/stat"):
+    fresh(num_leds=2)
+    os.makedirs(os.path.join(S.DIR, "sessions"))
+    S.save(S.MAP, {"B": {"led": 0, "cwd": "/y"}, "C": {"led": 1, "cwd": "/z"}})
+    rec("1", "B", procStart="1")
+    rec("2", "C", procStart=open("/proc/self/stat").read().rsplit(")", 1)[1].split()[19])
+    hook("SessionStart", "A", X)
+    check("tat WSL ngang: file cu trung pid tien trinh moi thi bo gan, procStart khop thi giu",
+          {k: v["led"] for k, v in m().items()} == {"A": 0, "C": 1}, "map=%s" % m())
+
 # Rut cam USB luc moi session dang ranh: khong hook nao chay. Tien trinh `keep` thay cong co lai thi gui lai ca
 # thanh, het session con song thi thoat; da co tien trinh keep khac giu khoa thi thoat ngay
 fresh(num_leds=2)
